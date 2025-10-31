@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "downloadUrl": "https://github.com/PPUC/pimoroni-pico/archive/zedmd.zip",
   "frameworks": "arduino",
-  "platforms": "https://github.com/maxgerhardt/platform-raspberrypi.git",
+  "platforms": "raspberrypi",
   "build": {
     "flags": [
       "-DNO_PICO_GRAPHICS"
