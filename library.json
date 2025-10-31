@@ -1,5 +1,5 @@
 {
-  "name": "hub75",
+  "name": "pimoroni-pico",
   "description": "pimoroni-pico hub75 driver, adjusted for ZeDMD",
   "version": "0.1.0",
   "downloadUrl": "https://github.com/PPUC/pimoroni-pico/archive/zedmd.zip",
@@ -11,7 +11,7 @@
     ],
     "srcDir": "drivers/hub75",
     "srcFilter": "+<*>"
-  }
+  },
   "headers": "hub75.hpp",
   "license": "MIT"
 }
