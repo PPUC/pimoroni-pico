@@ -8,8 +8,8 @@
 
 namespace pimoroni {
 
-Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order)
- : width(width), height(height), panel_type(panel_type), inverted_stb(inverted_stb), color_order(color_order)
+Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order, uint16_t *lut_table)
+ : width(width), height(height), panel_type(panel_type), inverted_stb(inverted_stb), color_order(color_order), lut_table(lut_table)
  {
     // Set up allllll the GPIO
     gpio_init(pin_r0); gpio_set_function(pin_r0, GPIO_FUNC_SIO); gpio_set_dir(pin_r0, true); gpio_put(pin_r0, 0);
@@ -107,7 +107,7 @@ void Hub75::set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b) {
     } else {
         offset = (y * width + x) * 2;
     }
-    back_buffer[offset] = (GAMMA_10BIT[b] << b_shift) | (GAMMA_10BIT[g] << g_shift) | (GAMMA_10BIT[r] << r_shift);
+    back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 }
 
 void Hub75::FM6126A_write_register(uint16_t value, uint8_t position) {
@@ -322,7 +322,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 }
                 int offset = offsety + sx * 2;
 
-                back_buffer[offset] = (GAMMA_10BIT[b] << b_shift) | (GAMMA_10BIT[g] << g_shift) | (GAMMA_10BIT[r] << r_shift);
+                back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
                 // Skip the empty byte in out 32-bit aligned 24-bit colour.
                 p++;
@@ -358,7 +358,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 }
                 offset += sx * 2;
 
-                back_buffer[offset] = (GAMMA_10BIT[b] << b_shift) | (GAMMA_10BIT[g] << g_shift) | (GAMMA_10BIT[r] << r_shift);
+                back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
                 // Skip the empty byte in out 32-bit aligned 24-bit colour.
                 p++;

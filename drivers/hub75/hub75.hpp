@@ -34,7 +34,7 @@ for i in range(1, len(gamma_lut)):
 	if gamma_lut[i] <= gamma_lut[i - 1]:
 		gamma_lut[i] = gamma_lut[i - 1] + 1
 */
-constexpr uint16_t GAMMA_10BIT[256] = {
+static inline uint16_t GAMMA_10BIT[256] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
     32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
@@ -58,7 +58,6 @@ struct Pixel {
     uint32_t color;
     constexpr Pixel() : color(0) {};
     constexpr Pixel(uint32_t color) : color(color) {};
-    constexpr Pixel(uint8_t r, uint8_t g, uint8_t b) : color((GAMMA_10BIT[b] << 20) | (GAMMA_10BIT[g] << 10) | GAMMA_10BIT[r]) {};
 };
 
 enum PanelType {
@@ -88,6 +87,7 @@ class Hub75 {
     PanelType panel_type;
     bool inverted_stb = false;
     COLOR_ORDER color_order;
+    uint16_t *lut_table;
     Pixel background = 0;
 
     // DMA & PIO
@@ -142,7 +142,7 @@ class Hub75 {
     Hub75(uint width, uint height) : Hub75(width, height, nullptr) {};
     Hub75(uint width, uint height, Pixel *buffer) : Hub75(width, height, buffer, PANEL_GENERIC) {};
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type) : Hub75(width, height, buffer, panel_type, false) {};
-    Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order=COLOR_ORDER::RGB);
+    Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT);
     ~Hub75();
 
     void FM6126A_write_register(uint16_t value, uint8_t position);
