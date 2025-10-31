@@ -7,7 +7,8 @@
   "platforms": "platformio/raspberrypi",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PPUC/pimoroni-pico.git"
+    "url": "https://github.com/PPUC/pimoroni-pico.git",
+    "branch": "zedmd"
   },
   "build": {
     "srcDir": "drivers/hub75",
