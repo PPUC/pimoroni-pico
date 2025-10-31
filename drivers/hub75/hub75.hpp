@@ -4,7 +4,9 @@
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/irq.h"
+#ifndef NO_PICO_GRAPHICS
 #include "libraries/pico_graphics/pico_graphics.hpp"
+#endif
 
 #ifndef NO_QSTR
 #include "hub75.pio.h"
@@ -149,11 +151,12 @@ class Hub75 {
 
     void set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b);
     void copy_to_back_buffer(void *data, size_t len, int start_x, int start_y, int g_width, int g_height);
-    void display_update();
     void clear();
     void start(irq_handler_t handler);
     void stop(irq_handler_t handler);
     void dma_complete();
+#ifndef NO_PICO_GRAPHICS
     void update(PicoGraphics *graphics);
+#endif
     };
 }

@@ -373,6 +373,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
     }
 }
 
+#ifndef NO_PICO_GRAPHICS
 void Hub75::update(PicoGraphics *graphics) {
     if(graphics->pen_type == PicoGraphics::PEN_RGB888) {
         copy_to_back_buffer(graphics->frame_buffer, width * height * sizeof(RGB888), 0, 0, graphics->bounds.w, graphics->bounds.h);
@@ -388,4 +389,5 @@ void Hub75::update(PicoGraphics *graphics) {
         });
     }
 }
+#endif
 }
