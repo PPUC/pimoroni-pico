@@ -6,10 +6,13 @@
   "frameworks": "arduino",
   "platforms": "platformio/raspberrypi",
   "build": {
+    "flags": [
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DENABLE_PICO_GRAPHICS=OFF"
+    ],
     "srcDir": "drivers/hub75",
     "srcFilter": "+<*>",
-    "flags": "-DENABLE_PICO_GRAPHICS=OFF"
   }
-  "headers": "hub75.hpp"
+  "headers": "hub75.hpp",
   "license": "MIT"
 }
