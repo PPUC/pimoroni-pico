@@ -10,7 +10,7 @@
       "-DNO_PICO_GRAPHICS"
     ],
     "srcDir": "drivers/hub75",
-    "srcFilter": "+<*>",
+    "srcFilter": "+<*>"
   }
   "headers": "hub75.hpp",
   "license": "MIT"
