@@ -12,10 +12,53 @@
 #include "hub75.pio.h"
 #endif
 
+#ifndef HUB75_R0
+#define HUB75_R0 0
+#endif
+#ifndef HUB75_G0
+#define HUB75_G0 1
+#endif
+#ifndef HUB75_B0
+#define HUB75_B0 2
+#endif
+#ifndef HUB75_R1
+#define HUB75_R1 3
+#endif
+#ifndef HUB75_G1
+#define HUB75_G1 4
+#endif
+#ifndef HUB75_B1
+#define HUB75_B1 5
+#endif
+#ifndef HUB75_A
+#define HUB75_A 6
+#endif
+#ifndef HUB75_B
+#define HUB75_B 7
+#endif
+#ifndef HUB75_C
+#define HUB75_C 8
+#endif
+#ifndef HUB75_D
+#define HUB75_D 9
+#endif
+#ifndef HUB75_E
+#define HUB75_E 10
+#endif
+#ifndef HUB75_CLK
+#define HUB75_CLK 11
+#endif
+#ifndef HUB75_LAT
+#define HUB75_LAT 12
+#endif
+#ifndef HUB75_OE
+#define HUB75_OE 13
+#endif
+
 namespace pimoroni {
-const uint DATA_BASE_PIN = 0;
-const uint DATA_N_PINS = 6;
-const uint ROWSEL_BASE_PIN = 6;
+const uint DATA_BASE_PIN = HUB75_R0;
+const uint DATA_N_PINS = HUB75_A;
+const uint ROWSEL_BASE_PIN = HUB75_A;
 const uint ROWSEL_N_PINS = 5;
 const uint BIT_DEPTH = 10;
 
@@ -106,38 +149,38 @@ class Hub75 {
 
 
     // Top half of display - 16 rows on a 32x32 panel
-    unsigned int pin_r0 = 0;
-    unsigned int pin_g0 = 1;
-    unsigned int pin_b0 = 2;
+    unsigned int pin_r0 = HUB75_R0;
+    unsigned int pin_g0 = HUB75_G0;
+    unsigned int pin_b0 = HUB75_B0;
 
     // Bottom half of display - 16 rows on a 64x64 panel
-    unsigned int pin_r1 = 3;
-    unsigned int pin_g1 = 4;
-    unsigned int pin_b1 = 5;
+    unsigned int pin_r1 = HUB75_R1;
+    unsigned int pin_g1 = HUB75_G1;
+    unsigned int pin_b1 = HUB75_B1;
 
     // Address pins, 5 lines = 2^5 = 32 values (max 64x64 display)
-    unsigned int pin_row_a = 6;
-    unsigned int pin_row_b = 7;
-    unsigned int pin_row_c = 8;
-    unsigned int pin_row_d = 9;
-    unsigned int pin_row_e = 10;
+    unsigned int pin_row_a = HUB75_A;
+    unsigned int pin_row_b = HUB75_B;
+    unsigned int pin_row_c = HUB75_C;
+    unsigned int pin_row_d = HUB75_D;
+    unsigned int pin_row_e = HUB75_E;
 
     // Sundry things
-    unsigned int pin_clk = 11;    // Clock
-    unsigned int pin_stb = 12;    // Strobe/Latch
-    unsigned int pin_oe = 13;     // Output Enable
+    unsigned int pin_clk = HUB75_CLK;    // Clock
+    unsigned int pin_stb = HUB75_LAT;    // Strobe/Latch
+    unsigned int pin_oe = HUB75_OE;      // Output Enable
 
     const bool clk_polarity = 1;
     const bool stb_polarity = 1;
     const bool oe_polarity = 0;
 
     // User buttons and status LED
-    unsigned int pin_sw_a = 14;
-    unsigned int pin_sw_user = 23;
+    //unsigned int pin_sw_a = 14;
+    //unsigned int pin_sw_user = 23;
 
-    unsigned int pin_led_r = 16;
-    unsigned int pin_led_g = 17;
-    unsigned int pin_led_b = 18;
+    //unsigned int pin_led_r = 16;
+    //unsigned int pin_led_g = 17;
+    //unsigned int pin_led_b = 18;
 
     Hub75(uint width, uint height) : Hub75(width, height, nullptr) {};
     Hub75(uint width, uint height, Pixel *buffer) : Hub75(width, height, buffer, PANEL_GENERIC) {};
