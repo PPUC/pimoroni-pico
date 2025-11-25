@@ -56,6 +56,10 @@ pulse_loop:
 
 % c-sdk {
 static inline void hub75_row_program_init(PIO pio, uint sm, uint offset, uint row_base_pin, uint n_row_pins, uint latch_base_pin, uint latch_cycles) {
+// https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_pio_1ga332210f0e594b24bf64f4bb1c8f49be3
+#ifdef PICO_RP2350
+    pio_set_gpio_base(pio, latch_base_pin > 30 ? 16 : 0);
+#endif
     pio_sm_set_consecutive_pindirs(pio, sm, row_base_pin, n_row_pins, true);
     pio_sm_set_consecutive_pindirs(pio, sm, latch_base_pin, 2, true);
     for (uint i = row_base_pin; i < row_base_pin + n_row_pins; ++i)
@@ -135,6 +139,10 @@ public shift1:              ; R1 G1 B1 (Bottom half of 64x64 displays)
 
 % c-sdk {
 static inline void hub75_data_rgb888_program_init(PIO pio, uint sm, uint offset, uint rgb_base_pin, uint clock_pin) {
+// https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_pio_1ga332210f0e594b24bf64f4bb1c8f49be3
+#ifdef PICO_RP2350
+    pio_set_gpio_base(pio, clock_pin > 30 ? 16 : 0);
+#endif
     pio_sm_set_consecutive_pindirs(pio, sm, rgb_base_pin, 6, true);
     pio_sm_set_consecutive_pindirs(pio, sm, clock_pin, 1, true);
     for (uint i = rgb_base_pin; i < rgb_base_pin + 6; ++i)
