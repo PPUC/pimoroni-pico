@@ -222,8 +222,12 @@ void Hub75::stop(irq_handler_t handler) {
 
     // Make sure the GPIO is in a known good state
     // since we don't know what the PIO might have done with it
-    gpio_put_masked(0b111111 << pin_r0, 0);
-    gpio_put_masked(0b11111 << pin_row_a, 0);
+    for (int i = 0; i < 6; i++) {
+        gpio_put(pin_r0 + i, 0);
+    }
+    for (int i = 0; i < 5; i++) {
+        gpio_put(pin_row_a + i, 0);
+    }
     gpio_put(pin_clk, !clk_polarity);
     gpio_put(pin_clk, !oe_polarity);
 }
