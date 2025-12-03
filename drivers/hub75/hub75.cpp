@@ -8,8 +8,10 @@
 
 namespace pimoroni {
 
-Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order, uint16_t *lut_table)
- : width(width), height(height), panel_type(panel_type), inverted_stb(inverted_stb), color_order(color_order), lut_table(lut_table)
+Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order,
+  uint16_t *lut_table, PIO pio)
+ : width(width), height(height), panel_type(panel_type), inverted_stb(inverted_stb), color_order(color_order),
+  lut_table(lut_table), pio(pio)
  {
     // Set up allllll the GPIO
     gpio_init(pin_r0); gpio_set_function(pin_r0, GPIO_FUNC_SIO); gpio_set_dir(pin_r0, true); gpio_put(pin_r0, 0);
@@ -150,15 +152,16 @@ void Hub75::start(irq_handler_t handler) {
         uint latch_cycles = clock_get_hz(clk_sys) / 4000000;
 
         // Claim the PIO so we can clean it upon soft restart
-        pio_sm_claim(pio, sm_data);
-        pio_sm_claim(pio, sm_row);
-
-        data_prog_offs = pio_add_program(pio, &hub75_data_rgb888_program);
+        pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_program, &pio, &sm_data,
+          &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
         if (inverted_stb) {
-            row_prog_offs = pio_add_program(pio, &hub75_row_inverted_program);
+          pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_inverted_program, &pio, &sm_row,
+            &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
         } else {
-            row_prog_offs = pio_add_program(pio, &hub75_row_program);
+          pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_program, &pio, &sm_row,
+            &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
         }
+
         hub75_data_rgb888_program_init(pio, sm_data, data_prog_offs, DATA_BASE_PIN, pin_clk);
         hub75_row_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb, latch_cycles);
 
