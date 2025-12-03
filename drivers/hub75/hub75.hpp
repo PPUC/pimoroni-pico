@@ -57,7 +57,7 @@
 
 namespace pimoroni {
 const uint DATA_BASE_PIN = HUB75_R0;
-const uint DATA_N_PINS = HUB75_A;
+const uint DATA_N_PINS = 6;
 const uint ROWSEL_BASE_PIN = HUB75_A;
 const uint ROWSEL_N_PINS = 5;
 const uint BIT_DEPTH = 10;
@@ -138,7 +138,7 @@ class Hub75 {
     uint bit = 0;
     uint row = 0;
 
-    PIO pio = pio0;
+    PIO pio;
     uint sm_data = 0;
     uint sm_row = 1;
 
@@ -185,7 +185,8 @@ class Hub75 {
     Hub75(uint width, uint height) : Hub75(width, height, nullptr) {};
     Hub75(uint width, uint height, Pixel *buffer) : Hub75(width, height, buffer, PANEL_GENERIC) {};
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type) : Hub75(width, height, buffer, panel_type, false) {};
-    Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT);
+    Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb,
+      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0);
     ~Hub75();
 
     void FM6126A_write_register(uint16_t value, uint8_t position);
