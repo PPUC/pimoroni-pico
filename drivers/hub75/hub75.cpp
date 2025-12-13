@@ -33,10 +33,16 @@ Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool 
     gpio_init(pin_oe); gpio_set_function(pin_oe, GPIO_FUNC_SIO); gpio_set_dir(pin_oe, true); gpio_put(pin_clk, !oe_polarity);
 
     if (buffer == nullptr) {
-        back_buffer = new Pixel[width * height];
+        back_buffer1 = new Pixel[width * height];
+        back_buffer2 = new Pixel[width * height];
+        render_back_buffer = back_buffer1;
+        draw_back_buffer = back_buffer2;
         managed_buffer = true;
     } else {
-        back_buffer = buffer;
+        back_buffer1 = buffer;
+        back_buffer2 = nullptr;
+        render_back_buffer = back_buffer1;
+        draw_back_buffer = back_buffer1;
         managed_buffer = false;
     }
 
@@ -96,7 +102,7 @@ void Hub75::set_color(uint x, uint y, Pixel c) {
     } else {
         offset = (y * width + x) * 2;
     }
-    back_buffer[offset] = c;
+    draw_back_buffer[offset] = c;
 }
 
 void Hub75::set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b) {
@@ -109,7 +115,7 @@ void Hub75::set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b) {
     } else {
         offset = (y * width + x) * 2;
     }
-    back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
+    draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 }
 
 void Hub75::FM6126A_write_register(uint16_t value, uint8_t position) {
@@ -188,7 +194,7 @@ void Hub75::start(irq_handler_t handler) {
 
         hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
         dma_channel_set_trans_count(dma_channel, width * 2, false);
-        dma_channel_set_read_addr(dma_channel, &back_buffer, true);
+        dma_channel_set_read_addr(dma_channel, render_back_buffer, true);
     }
 }
 
@@ -235,9 +241,16 @@ void Hub75::stop(irq_handler_t handler) {
     gpio_put(pin_clk, !oe_polarity);
 }
 
+void Hub75::render() {
+    if (render_back_buffer != nullptr && draw_back_buffer != nullptr) {
+        memcpy(render_back_buffer, draw_back_buffer, width * height * sizeof(Pixel));
+    }
+}
+
 Hub75::~Hub75() {
     if (managed_buffer) {
-        delete[] back_buffer;
+        delete[] back_buffer1;
+        delete[] back_buffer2;
     }
 }
 
@@ -280,7 +293,7 @@ void Hub75::dma_complete() {
         }
 
         dma_channel_set_trans_count(dma_channel, width * 2, false);
-        dma_channel_set_read_addr(dma_channel, &back_buffer[row * width * 2], true);
+        dma_channel_set_read_addr(dma_channel, &render_back_buffer[row * width * 2], true);
     }
 }
 
@@ -329,7 +342,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 }
                 int offset = offsety + sx * 2;
 
-                back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
+                draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
                 // Skip the empty byte in out 32-bit aligned 24-bit colour.
                 p++;
@@ -365,7 +378,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 }
                 offset += sx * 2;
 
-                back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
+                draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
                 // Skip the empty byte in out 32-bit aligned 24-bit colour.
                 p++;

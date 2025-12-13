@@ -125,7 +125,10 @@ class Hub75 {
     uint r_shift = 0;
     uint g_shift = 10;
     uint b_shift = 20;
-    Pixel *back_buffer;
+    Pixel *back_buffer1;
+    Pixel *back_buffer2;
+    Pixel *render_back_buffer = nullptr;
+    Pixel *draw_back_buffer = nullptr;
     bool managed_buffer = false;
     PanelType panel_type;
     bool inverted_stb = false;
@@ -192,7 +195,7 @@ class Hub75 {
     void FM6126A_write_register(uint16_t value, uint8_t position);
     void FM6126A_setup();
     void set_color(uint x, uint y, Pixel c);
-
+    void render();
     void set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b);
     void copy_to_back_buffer(void *data, size_t len, int start_x, int start_y, int g_width, int g_height);
     void clear();
