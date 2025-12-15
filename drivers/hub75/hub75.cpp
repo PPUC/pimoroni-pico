@@ -242,7 +242,7 @@ void Hub75::stop(irq_handler_t handler) {
 }
 
 void Hub75::render() {
-    if (render_back_buffer != nullptr && draw_back_buffer != nullptr) {
+    if (back_buffer2 != nullptr) {
         memcpy(render_back_buffer, draw_back_buffer, width * height * sizeof(Pixel));
     }
 }
