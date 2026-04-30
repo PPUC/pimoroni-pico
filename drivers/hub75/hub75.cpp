@@ -238,7 +238,7 @@ void Hub75::init_shiftreg_rows() {
     gpio_init(pin_row_c); gpio_set_function(pin_row_c, GPIO_FUNC_SIO); gpio_set_dir(pin_row_c, true);
 
     gpio_put(pin_row_a, 0);
-    gpio_put(pin_row_b, 1);
+    gpio_put(pin_row_b, 0);
     gpio_put(pin_row_c, 0);
 }
 
@@ -247,6 +247,7 @@ void Hub75::step_shiftreg_row(uint row) const {
     gpio_put(pin_row_c, row == 0);
     gpio_put(pin_row_a, 1);
     gpio_put(pin_row_a, 0);
+    gpio_put(pin_row_b, 0);
     if (row == 0) {
         gpio_put(pin_row_c, 0);
     }
