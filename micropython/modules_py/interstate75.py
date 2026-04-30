@@ -33,6 +33,16 @@ class Interstate75:
 
     PANEL_GENERIC = hub75.PANEL_GENERIC
     PANEL_FM6126A = hub75.PANEL_FM6126A
+    SHIFT_DRIVER_SHIFTREG = hub75.SHIFT_DRIVER_SHIFTREG
+    SHIFT_DRIVER_FM6124 = hub75.SHIFT_DRIVER_FM6124
+    SHIFT_DRIVER_FM6126A = hub75.SHIFT_DRIVER_FM6126A
+    SHIFT_DRIVER_ICN2038S = hub75.SHIFT_DRIVER_ICN2038S
+    SHIFT_DRIVER_MBI5124 = hub75.SHIFT_DRIVER_MBI5124
+    SHIFT_DRIVER_DP3246 = hub75.SHIFT_DRIVER_DP3246
+    LINE_DECODER_TYPE138 = hub75.LINE_DECODER_TYPE138
+    LINE_DECODER_TYPE595 = hub75.LINE_DECODER_TYPE595
+    LINE_DECODER_TYPE_DIRECT = hub75.LINE_DECODER_TYPE_DIRECT
+    LINE_DECODER_SM5266P = hub75.LINE_DECODER_SM5266P
     COLOR_ORDER_RGB = hub75.COLOR_ORDER_RGB
     COLOR_ORDER_RBG = hub75.COLOR_ORDER_RBG
     COLOR_ORDER_GRB = hub75.COLOR_ORDER_GRB
@@ -43,7 +53,8 @@ class Interstate75:
     # Count Constants
     NUM_SWITCHES = 2
 
-    def __init__(self, display, panel_type=hub75.PANEL_GENERIC, stb_invert=False, color_order=hub75.COLOR_ORDER_RGB):
+    def __init__(self, display, panel_type=hub75.PANEL_GENERIC, stb_invert=False, color_order=hub75.COLOR_ORDER_RGB,
+                 shift_driver=hub75.SHIFT_DRIVER_SHIFTREG, line_decoder=hub75.LINE_DECODER_TYPE138):
         self.interstate75w = "Pico W" in sys.implementation._machine  # noqa: SLF001
         self.display = PicoGraphics(display=display)
         self.width, self.height = self.display.get_bounds()
@@ -55,7 +66,15 @@ class Interstate75:
             out_width = 256
             out_height = 64
 
-        self.hub75 = hub75.Hub75(out_width, out_height, panel_type=panel_type, stb_invert=stb_invert, color_order=color_order)
+        self.hub75 = hub75.Hub75(
+            out_width,
+            out_height,
+            panel_type=panel_type,
+            stb_invert=stb_invert,
+            color_order=color_order,
+            shift_driver=shift_driver,
+            line_decoder=line_decoder,
+        )
         self.hub75.start()
         if self.interstate75w:
             self._switch_pins = self.SWITCH_PINS_W

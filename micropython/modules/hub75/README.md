@@ -73,6 +73,21 @@ The available orders are defined as constants in `hub75`:
 * `COLOR_ORDER_BRG`
 * `COLOR_ORDER_BGR`
 
+### Selecting Shift Driver And Line Decoder
+
+Panels that need non-default HUB75 control logic can now select a shift driver and line decoder explicitly:
+
+```python
+matrix = hub75.Hub75(
+    WIDTH,
+    HEIGHT,
+    shift_driver=hub75.SHIFT_DRIVER_DP3246,
+    line_decoder=hub75.LINE_DECODER_TYPE595,
+)
+```
+
+At present the RP2350 implementation adds support for the `DP3246 + TYPE595` combination.
+
 ## Quick Reference
 
 ### Set A Pixel

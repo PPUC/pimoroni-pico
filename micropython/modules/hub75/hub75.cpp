@@ -67,6 +67,21 @@ void Hub75_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind
             break;
     }
 
+    switch(self->hub75->shift_driver) {
+        case SHIFT_DRIVER_DP3246:
+            mp_print_str(print, ", shift_driver: dp3246 ");
+            break;
+        case SHIFT_DRIVER_FM6126A:
+            mp_print_str(print, ", shift_driver: fm6126a ");
+            break;
+        default:
+            break;
+    }
+
+    if(self->hub75->line_decoder == LINE_DECODER_TYPE595) {
+        mp_print_str(print, ", line_decoder: type595 ");
+    }
+
     mp_print_str(print, " )");
 }
 
@@ -86,7 +101,9 @@ mp_obj_t Hub75_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, c
         ARG_buffer,
         ARG_panel_type,
         ARG_stb_invert,
-        ARG_color_order
+        ARG_color_order,
+        ARG_shift_driver,
+        ARG_line_decoder
     };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_width, MP_ARG_REQUIRED | MP_ARG_INT },
@@ -95,6 +112,8 @@ mp_obj_t Hub75_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, c
         { MP_QSTR_panel_type, MP_ARG_INT, {.u_int = 0} },
         { MP_QSTR_stb_invert, MP_ARG_INT, {.u_int = 0} },
         { MP_QSTR_color_order, MP_ARG_INT, {.u_int = (uint8_t)Hub75::COLOR_ORDER::RGB} },
+        { MP_QSTR_shift_driver, MP_ARG_INT, {.u_int = (uint8_t)SHIFT_DRIVER_SHIFTREG} },
+        { MP_QSTR_line_decoder, MP_ARG_INT, {.u_int = (uint8_t)LINE_DECODER_TYPE138} },
     };
 
     // Parse args.
@@ -106,6 +125,8 @@ mp_obj_t Hub75_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, c
     PanelType paneltype = (PanelType)args[ARG_panel_type].u_int;
     bool stb_invert = args[ARG_stb_invert].u_int;
     Hub75::COLOR_ORDER color_order = (Hub75::COLOR_ORDER)args[ARG_color_order].u_int;
+    ShiftDriver shift_driver = (ShiftDriver)args[ARG_shift_driver].u_int;
+    LineDecoder line_decoder = (LineDecoder)args[ARG_line_decoder].u_int;
 
     Pixel *buffer = nullptr;
 
@@ -122,7 +143,7 @@ mp_obj_t Hub75_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, c
 
     hub75_obj = mp_obj_malloc_with_finaliser(_Hub75_obj_t, &Hub75_type);
     hub75_obj->buf = buffer;
-    hub75_obj->hub75 = m_new_class(Hub75, width, height, buffer, paneltype, stb_invert, color_order);
+    hub75_obj->hub75 = m_new_class(Hub75, width, height, buffer, paneltype, stb_invert, color_order, GAMMA_10BIT, pio0, shift_driver, line_decoder);
 
     return MP_OBJ_FROM_PTR(hub75_obj);
 }

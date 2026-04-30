@@ -108,6 +108,22 @@ enum PanelType {
     PANEL_FM6126A,
 };
 
+enum ShiftDriver {
+    SHIFT_DRIVER_SHIFTREG = 0,
+    SHIFT_DRIVER_FM6124,
+    SHIFT_DRIVER_FM6126A,
+    SHIFT_DRIVER_ICN2038S,
+    SHIFT_DRIVER_MBI5124,
+    SHIFT_DRIVER_DP3246,
+};
+
+enum LineDecoder {
+    LINE_DECODER_TYPE138 = 0,
+    LINE_DECODER_TYPE595,
+    LINE_DECODER_TYPE_DIRECT,
+    LINE_DECODER_SM5266P,
+};
+
 Pixel hsv_to_rgb(float h, float s, float v);
 
 class Hub75 {
@@ -131,6 +147,8 @@ class Hub75 {
     Pixel *draw_back_buffer = nullptr;
     bool managed_buffer = false;
     PanelType panel_type;
+    ShiftDriver shift_driver;
+    LineDecoder line_decoder;
     bool inverted_stb = false;
     COLOR_ORDER color_order;
     uint16_t *lut_table;
@@ -189,11 +207,13 @@ class Hub75 {
     Hub75(uint width, uint height, Pixel *buffer) : Hub75(width, height, buffer, PANEL_GENERIC) {};
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type) : Hub75(width, height, buffer, panel_type, false) {};
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb,
-      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0);
+      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0,
+      ShiftDriver shift_driver = SHIFT_DRIVER_SHIFTREG, LineDecoder line_decoder = LINE_DECODER_TYPE138);
     ~Hub75();
 
     void FM6126A_write_register(uint16_t value, uint8_t position);
     void FM6126A_setup();
+    void DP3246_setup();
     void set_color(uint x, uint y, Pixel c);
     void render();
     void set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b);
@@ -202,6 +222,7 @@ class Hub75 {
     void start(irq_handler_t handler);
     void stop(irq_handler_t handler);
     void dma_complete();
+    uint32_t encode_row_payload(uint row, uint bit) const;
 #ifndef NO_PICO_GRAPHICS
     void update(PicoGraphics *graphics);
 #endif
