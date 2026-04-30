@@ -227,16 +227,13 @@ void Hub75::init_shiftreg_rows() {
 }
 
 void Hub75::step_shiftreg_row(uint row) const {
-    const uint clock_pin = pin_row_c;
-    const uint data_pin = pin_row_a;
-
     gpio_put(pin_row_b, 1);
-    gpio_put(data_pin, row == 0);
-    gpio_put(clock_pin, 1);
-    gpio_put(clock_pin, 0);
+    gpio_put(pin_row_c, row == 0);
+    gpio_put(pin_row_a, 1);
+    gpio_put(pin_row_a, 0);
     gpio_put(pin_row_b, 0);
     if (row == 0) {
-        gpio_put(data_pin, 0);
+        gpio_put(pin_row_c, 0);
     }
 }
 
