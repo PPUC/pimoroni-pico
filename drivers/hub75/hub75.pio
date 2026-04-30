@@ -177,10 +177,11 @@ pulse_loop:
 .side_set 2
 
 .wrap_target
-    out null, 5 [7]    side 0x2 ; Deassert OEn, discard row select bits
-    out x, 27   [7]    side 0x3 ; Pulse LATCH, get OEn pulse width
-    nop         [7]    side 0x3 ; Extend LATCH (2/3)
-    nop         [7]    side 0x3 ; Extend LATCH (3/3)
+    out null, 5 [1]    side 0x2 ; Deassert OEn, discard row select bits
+    mov x, y    [3]    side 0x3 ; Assert LATCH
+wait_loop_dp:
+    jmp x-- wait_loop_dp side 0x3 ; Hold LATCH while final clocks are sent
+    out x, 27          side 0x2 ; Drop LATCH, get OEn pulse width
 pulse_loop:
     jmp x-- pulse_loop side 0x0 ; Assert OEn for x+1 cycles
 .wrap
@@ -190,10 +191,11 @@ pulse_loop:
 .side_set 2
 
 .wrap_target
-    out null, 5 [7]    side 0x3 ; Deassert OEn, discard row select bits
-    out x, 27   [7]    side 0x2 ; Pulse LATCH, get OEn pulse width
-    nop         [7]    side 0x2 ; Extend LATCH (2/3)
-    nop         [7]    side 0x2 ; Extend LATCH (3/3)
+    out null, 5 [1]    side 0x3 ; Deassert OEn, discard row select bits
+    mov x, y    [3]    side 0x2 ; Assert LATCH
+wait_loop_dp:
+    jmp x-- wait_loop_dp side 0x2 ; Hold LATCH while final clocks are sent
+    out x, 27          side 0x3 ; Drop LATCH, get OEn pulse width
 pulse_loop:
     jmp x-- pulse_loop side 0x1 ; Assert OEn for x+1 cycles
 .wrap

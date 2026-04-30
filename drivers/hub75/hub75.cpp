@@ -454,14 +454,6 @@ void Hub75::dma_complete() {
     if(dma_channel_get_irq0_status(dma_channel)) {
         dma_channel_acknowledge_irq0(dma_channel);
 
-        // Fully flush the pixel shifter before latching the next row.
-        for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
-            pio_sm_put_blocking(pio, sm_data, 0);
-        }
-
-        // SM is finished when it stalls on empty TX FIFO
-        hub75_wait_tx_stall(pio, sm_data);
-
         // Check that previous OEn pulse is finished, else things WILL get out of sequence
         hub75_wait_tx_stall(pio, sm_row);
 
@@ -473,8 +465,23 @@ void Hub75::dma_complete() {
             }
         }
 
-        // Latch row data, pulse output enable for new row.
-        pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
+        if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
+            // DP3246 wants LAT held while the final clocks are still being shifted.
+            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
+        }
+
+        // Fully flush the pixel shifter before latching the next row.
+        for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
+            pio_sm_put_blocking(pio, sm_data, 0);
+        }
+
+        // SM is finished when it stalls on empty TX FIFO
+        hub75_wait_tx_stall(pio, sm_data);
+
+        if (!(shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595)) {
+            // Latch row data, pulse output enable for new row.
+            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
+        }
 
         row++;
 
