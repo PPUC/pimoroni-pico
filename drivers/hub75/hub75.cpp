@@ -455,7 +455,7 @@ void Hub75::dma_complete() {
         dma_channel_acknowledge_irq0(dma_channel);
 
         // Fully flush the pixel shifter before latching the next row.
-        for (int i = 0; i < 8; ++i) {
+        for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
             pio_sm_put_blocking(pio, sm_data, 0);
         }
 
@@ -516,15 +516,18 @@ PanelType Hub75::legacy_panel_type() const {
 }
 
 int Hub75::buffer_offset(uint x, uint y) const {
-    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
-        x = (x + width - 2) % width;
-    }
-
     if(y >= height / 2) {
         y -= height / 2;
         return (y * width + x) * 2 + 1;
     }
     return (y * width + x) * 2;
+}
+
+uint Hub75::end_of_row_dummy_pixels() const {
+    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
+        return 6;
+    }
+    return 2;
 }
 
 void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y, int g_width, int g_height) {
