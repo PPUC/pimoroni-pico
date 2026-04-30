@@ -510,25 +510,39 @@ uint Hub75::logical_row_count() const {
     return height / scan_parallel_rows();
 }
 
+void Hub75::remap_panel_coords(uint x, uint y, uint &mapped_x, uint &mapped_y) const {
+    mapped_x = x;
+    mapped_y = y;
+
+    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
+        // Match the ESP32 VirtualMatrixPanel FOUR_SCAN_64PX_HIGH remap.
+        uint remapped_y = y;
+        if ((remapped_y & 8u) != ((remapped_y & 16u) >> 1u)) {
+            remapped_y = ((remapped_y & 0b11000u) ^ 0b11000u) + (remapped_y & 0b11100111u);
+        }
+
+        if ((remapped_y & 8u) == 0) {
+            mapped_x = x + width;
+        } else {
+            mapped_x = x;
+        }
+
+        mapped_y = ((remapped_y >> 4u) * 8u) + (remapped_y & 0b111u);
+    }
+}
+
 int Hub75::buffer_offset(uint x, uint y) const {
     if (scan_parallel_rows() == 4) {
-        const uint quarter_rows = height / 4;
-        const uint line_width = width * 2;
-        const uint local_y = y % quarter_rows;
-        const uint group = y / quarter_rows;
-        const uint base = local_y * width * 4 + x * 2;
+        uint mapped_x;
+        uint mapped_y;
+        remap_panel_coords(x, y, mapped_x, mapped_y);
 
-        switch (group) {
-            case 0:
-                return base + line_width;
-            case 1:
-                return base;
-            case 2:
-                return base + line_width + 1;
-            case 3:
-            default:
-                return base + 1;
+        const uint scan_width = width * 2;
+        if(mapped_y >= height / 4) {
+            mapped_y -= height / 4;
+            return (mapped_y * scan_width + mapped_x) * 2 + 1;
         }
+        return (mapped_y * scan_width + mapped_x) * 2;
     }
 
     if(y >= height / 2) {

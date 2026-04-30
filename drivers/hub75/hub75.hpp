@@ -232,6 +232,7 @@ class Hub75 {
     uint dma_words_per_row() const;
     uint logical_row_count() const;
     int buffer_offset(uint x, uint y) const;
+    void remap_panel_coords(uint x, uint y, uint &mapped_x, uint &mapped_y) const;
     void init_shiftreg_rows();
     void step_shiftreg_row(uint row) const;
 #ifndef NO_PICO_GRAPHICS
