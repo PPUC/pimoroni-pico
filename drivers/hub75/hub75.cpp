@@ -232,6 +232,26 @@ void Hub75::DP3246_setup() {
     pulse_panel_clock(*this);
 }
 
+void Hub75::init_shiftreg_rows() {
+    gpio_init(pin_row_a); gpio_set_function(pin_row_a, GPIO_FUNC_SIO); gpio_set_dir(pin_row_a, true);
+    gpio_init(pin_row_b); gpio_set_function(pin_row_b, GPIO_FUNC_SIO); gpio_set_dir(pin_row_b, true);
+    gpio_init(pin_row_c); gpio_set_function(pin_row_c, GPIO_FUNC_SIO); gpio_set_dir(pin_row_c, true);
+
+    gpio_put(pin_row_a, 0);
+    gpio_put(pin_row_b, 1);
+    gpio_put(pin_row_c, 0);
+}
+
+void Hub75::step_shiftreg_row(uint row) const {
+    gpio_put(pin_row_b, 1);
+    gpio_put(pin_row_c, row == 0);
+    gpio_put(pin_row_a, 1);
+    gpio_put(pin_row_a, 0);
+    if (row == 0) {
+        gpio_put(pin_row_c, 0);
+    }
+}
+
 void Hub75::start(irq_handler_t handler) {
     if(handler) {
         switch (shift_driver) {
@@ -248,23 +268,30 @@ void Hub75::start(irq_handler_t handler) {
         uint latch_cycles = clock_get_hz(clk_sys) / 4000000;
 
         // Claim the PIO so we can clean it upon soft restart
-        pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_program, &pio, &sm_data,
-          &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
+        if (shift_driver == SHIFT_DRIVER_DP3246) {
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_invclk_program, &pio, &sm_data,
+              &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
+        } else {
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_program, &pio, &sm_data,
+              &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
+        }
         if (line_decoder == LINE_DECODER_TYPE595) {
+          init_shiftreg_rows();
+          step_shiftreg_row(0);
           if (shift_driver == SHIFT_DRIVER_DP3246) {
             if (inverted_stb) {
-              pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_shiftreg_dp3246_inverted_program, &pio, &sm_row,
-                &row_prog_offs, ROWSEL_BASE_PIN, 3, true);
+              pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_inverted_program, &pio, &sm_row,
+                &row_prog_offs, pin_stb, 2, true);
             } else {
-              pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_shiftreg_dp3246_program, &pio, &sm_row,
-                &row_prog_offs, ROWSEL_BASE_PIN, 3, true);
+              pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_program, &pio, &sm_row,
+                &row_prog_offs, pin_stb, 2, true);
             }
           } else if (inverted_stb) {
-            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_shiftreg_inverted_program, &pio, &sm_row,
-              &row_prog_offs, ROWSEL_BASE_PIN, 3, true);
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_inverted_program, &pio, &sm_row,
+              &row_prog_offs, pin_stb, 2, true);
           } else {
-            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_shiftreg_program, &pio, &sm_row,
-              &row_prog_offs, ROWSEL_BASE_PIN, 3, true);
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_program, &pio, &sm_row,
+              &row_prog_offs, pin_stb, 2, true);
           }
         } else if (shift_driver == SHIFT_DRIVER_DP3246) {
           if (inverted_stb) {
@@ -282,9 +309,17 @@ void Hub75::start(irq_handler_t handler) {
             &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
         }
 
-        hub75_data_rgb888_program_init(pio, sm_data, data_prog_offs, DATA_BASE_PIN, pin_clk);
+        if (shift_driver == SHIFT_DRIVER_DP3246) {
+            hub75_data_rgb888_invclk_program_init(pio, sm_data, data_prog_offs, DATA_BASE_PIN, pin_clk);
+        } else {
+            hub75_data_rgb888_program_init(pio, sm_data, data_prog_offs, DATA_BASE_PIN, pin_clk);
+        }
         if (line_decoder == LINE_DECODER_TYPE595) {
-            hub75_row_shiftreg_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, pin_stb, latch_cycles);
+            if (shift_driver == SHIFT_DRIVER_DP3246) {
+                hub75_row_noaddr_dp3246_program_init(pio, sm_row, row_prog_offs, pin_stb, latch_cycles);
+            } else {
+                hub75_row_noaddr_program_init(pio, sm_row, row_prog_offs, pin_stb, latch_cycles);
+            }
         } else {
             hub75_row_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb, latch_cycles);
         }
@@ -310,7 +345,11 @@ void Hub75::start(irq_handler_t handler) {
         row = 0;
         bit = 0;
 
-        hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
+        if (shift_driver == SHIFT_DRIVER_DP3246) {
+            hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
+        } else {
+            hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
+        }
         dma_channel_set_trans_count(dma_channel, width * 2, false);
         dma_channel_set_read_addr(dma_channel, render_back_buffer, true);
     }
@@ -332,7 +371,11 @@ void Hub75::stop(irq_handler_t handler) {
     if(pio_sm_is_claimed(pio, sm_data)) {
         pio_sm_set_enabled(pio, sm_data, false);
         pio_sm_drain_tx_fifo(pio, sm_data);
-        pio_remove_program(pio, &hub75_data_rgb888_program, data_prog_offs);
+        if (shift_driver == SHIFT_DRIVER_DP3246) {
+            pio_remove_program(pio, &hub75_data_rgb888_invclk_program, data_prog_offs);
+        } else {
+            pio_remove_program(pio, &hub75_data_rgb888_program, data_prog_offs);
+        }
         pio_sm_unclaim(pio, sm_data);
     }
 
@@ -340,16 +383,16 @@ void Hub75::stop(irq_handler_t handler) {
         pio_sm_set_enabled(pio, sm_row, false);
         pio_sm_drain_tx_fifo(pio, sm_row);
         if (line_decoder == LINE_DECODER_TYPE595) {
-            if (shift_driver == SHIFT_DRIVER_DP3246) {
+          if (shift_driver == SHIFT_DRIVER_DP3246) {
                 if (inverted_stb) {
-                    pio_remove_program(pio, &hub75_row_shiftreg_dp3246_inverted_program, row_prog_offs);
+                    pio_remove_program(pio, &hub75_row_noaddr_dp3246_inverted_program, row_prog_offs);
                 } else {
-                    pio_remove_program(pio, &hub75_row_shiftreg_dp3246_program, row_prog_offs);
+                    pio_remove_program(pio, &hub75_row_noaddr_dp3246_program, row_prog_offs);
                 }
             } else if (inverted_stb) {
-                pio_remove_program(pio, &hub75_row_shiftreg_inverted_program, row_prog_offs);
+                pio_remove_program(pio, &hub75_row_noaddr_inverted_program, row_prog_offs);
             } else {
-                pio_remove_program(pio, &hub75_row_shiftreg_program, row_prog_offs);
+                pio_remove_program(pio, &hub75_row_noaddr_program, row_prog_offs);
             }
         } else if (shift_driver == SHIFT_DRIVER_DP3246) {
             if (inverted_stb) {
@@ -404,28 +447,22 @@ void Hub75::dma_complete() {
     if(dma_channel_get_irq0_status(dma_channel)) {
         dma_channel_acknowledge_irq0(dma_channel);
 
-        // Check that previous OEn pulse is finished, else things WILL get out of sequence
-        hub75_wait_tx_stall(pio, sm_row);
-
-        if (shift_driver == SHIFT_DRIVER_DP3246) {
-            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-            pio_sm_put_blocking(pio, sm_data, 0);
-            pio_sm_put_blocking(pio, sm_data, 0);
-            pio_sm_put_blocking(pio, sm_data, 0);
-        } else {
-            pio_sm_put_blocking(pio, sm_data, 0);
-            pio_sm_put_blocking(pio, sm_data, 0);
-        }
+        // Push out a dummy pixel for each row
+        pio_sm_put_blocking(pio, sm_data, 0);
+        pio_sm_put_blocking(pio, sm_data, 0);
 
         // SM is finished when it stalls on empty TX FIFO
         hub75_wait_tx_stall(pio, sm_data);
 
-        if (shift_driver != SHIFT_DRIVER_DP3246) {
-            // Latch row data, pulse output enable for new row.
-            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
+        // Check that previous OEn pulse is finished, else things WILL get out of sequence
+        hub75_wait_tx_stall(pio, sm_row);
+
+        if (line_decoder == LINE_DECODER_TYPE595) {
+            step_shiftreg_row(row);
         }
 
-        hub75_wait_tx_stall(pio, sm_row);
+        // Latch row data, pulse output enable for new row.
+        pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
 
         row++;
 
@@ -435,7 +472,11 @@ void Hub75::dma_complete() {
             if (bit == BIT_DEPTH) {
                 bit = 0;
             }
-            hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
+            if (shift_driver == SHIFT_DRIVER_DP3246) {
+                hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
+            } else {
+                hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
+            }
         }
 
         dma_channel_set_trans_count(dma_channel, width * 2, false);
@@ -447,10 +488,7 @@ uint32_t Hub75::encode_row_payload(uint row, uint bit) const {
     uint32_t oe_width = brightness << bit;
 
     if (line_decoder == LINE_DECODER_TYPE595) {
-        uint32_t row_data = row == 0 ? 1u : 0u;
-        uint32_t shift_low = (1u << 1) | (row_data << 2);
-        uint32_t shift_high = shift_low | 1u;
-        return shift_low | (shift_high << 3) | (oe_width << 6);
+        return oe_width << 5;
     }
 
     return row | (oe_width << 5);

@@ -103,12 +103,12 @@ struct Pixel {
     constexpr Pixel(uint32_t color) : color(color) {};
 };
 
+// Legacy compatibility selector. New hardware-specific behavior should use ShiftDriver.
 enum PanelType {
     PANEL_GENERIC = 0,
     PANEL_FM6126A,
 };
 
-// Legacy compatibility selector. New hardware-specific behavior should use ShiftDriver.
 enum ShiftDriver {
     SHIFT_DRIVER_SHIFTREG = 0,
     SHIFT_DRIVER_FM6124,
@@ -227,6 +227,8 @@ class Hub75 {
     void dma_complete();
     uint32_t encode_row_payload(uint row, uint bit) const;
     PanelType legacy_panel_type() const;
+    void init_shiftreg_rows();
+    void step_shiftreg_row(uint row) const;
 #ifndef NO_PICO_GRAPHICS
     void update(PicoGraphics *graphics);
 #endif

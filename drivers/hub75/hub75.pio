@@ -150,6 +150,66 @@ pulse_loop:
     jmp x-- pulse_loop side 0x1 ; Assert OEn for x+1 cycles
 .wrap
 
+.program hub75_row_noaddr
+
+.side_set 2
+
+.wrap_target
+    out null, 5 [1]    side 0x2 ; Deassert OEn, discard row select bits
+    mov x, y    [3]    side 0x3 ; Pulse LATCH
+wait_loop:
+    jmp x-- wait_loop  side 0x2 ; Wait for row to latch
+    out x, 27          side 0x2 ; Get OEn pulse width
+pulse_loop:
+    jmp x-- pulse_loop side 0x0 ; Assert OEn for x+1 cycles
+.wrap
+
+.program hub75_row_noaddr_inverted
+
+.side_set 2
+
+.wrap_target
+    out null, 5 [1]    side 0x3 ; Deassert OEn, discard row select bits
+    mov x, y    [3]    side 0x2 ; Pulse LATCH
+wait_loop:
+    jmp x-- wait_loop  side 0x3 ; Wait for row to latch
+    out x, 27          side 0x3 ; Get OEn pulse width
+pulse_loop:
+    jmp x-- pulse_loop side 0x1 ; Assert OEn for x+1 cycles
+.wrap
+
+.program hub75_row_noaddr_dp3246
+
+.side_set 2
+
+.wrap_target
+    out null, 5 [1]    side 0x2 ; Deassert OEn, discard row select bits
+    mov x, y    [3]    side 0x3 ; Pulse LATCH
+    nop         [3]    side 0x3 ; Extend LATCH (2/3)
+    nop         [3]    side 0x3 ; Extend LATCH (3/3)
+wait_loop:
+    jmp x-- wait_loop  side 0x2 ; Wait for row to latch
+    out x, 27          side 0x2 ; Get OEn pulse width
+pulse_loop:
+    jmp x-- pulse_loop side 0x0 ; Assert OEn for x+1 cycles
+.wrap
+
+.program hub75_row_noaddr_dp3246_inverted
+
+.side_set 2
+
+.wrap_target
+    out null, 5 [1]    side 0x3 ; Deassert OEn, discard row select bits
+    mov x, y    [3]    side 0x2 ; Pulse LATCH
+    nop         [3]    side 0x2 ; Extend LATCH (2/3)
+    nop         [3]    side 0x2 ; Extend LATCH (3/3)
+wait_loop:
+    jmp x-- wait_loop  side 0x3 ; Wait for row to latch
+    out x, 27          side 0x3 ; Get OEn pulse width
+pulse_loop:
+    jmp x-- pulse_loop side 0x1 ; Assert OEn for x+1 cycles
+.wrap
+
 % c-sdk {
 static inline void hub75_row_program_init(PIO pio, uint sm, uint offset, uint row_base_pin, uint n_row_pins, uint latch_base_pin, uint latch_cycles) {
     pio_sm_set_consecutive_pindirs(pio, sm, row_base_pin, n_row_pins, true);
@@ -161,6 +221,34 @@ static inline void hub75_row_program_init(PIO pio, uint sm, uint offset, uint ro
 
     pio_sm_config c = hub75_row_program_get_default_config(offset);
     sm_config_set_out_pins(&c, row_base_pin, n_row_pins);
+    sm_config_set_sideset_pins(&c, latch_base_pin);
+    sm_config_set_out_shift(&c, true, true, 32);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32));
+    pio_sm_put(pio, sm, latch_cycles);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void hub75_row_noaddr_program_init(PIO pio, uint sm, uint offset, uint latch_base_pin, uint latch_cycles) {
+    pio_sm_set_consecutive_pindirs(pio, sm, latch_base_pin, 2, true);
+    pio_gpio_init(pio, latch_base_pin);
+    pio_gpio_init(pio, latch_base_pin + 1);
+
+    pio_sm_config c = hub75_row_noaddr_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&c, latch_base_pin);
+    sm_config_set_out_shift(&c, true, true, 32);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32));
+    pio_sm_put(pio, sm, latch_cycles);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void hub75_row_noaddr_dp3246_program_init(PIO pio, uint sm, uint offset, uint latch_base_pin, uint latch_cycles) {
+    pio_sm_set_consecutive_pindirs(pio, sm, latch_base_pin, 2, true);
+    pio_gpio_init(pio, latch_base_pin);
+    pio_gpio_init(pio, latch_base_pin + 1);
+
+    pio_sm_config c = hub75_row_noaddr_dp3246_program_get_default_config(offset);
     sm_config_set_sideset_pins(&c, latch_base_pin);
     sm_config_set_out_shift(&c, true, true, 32);
     pio_sm_init(pio, sm, offset, &c);
@@ -276,5 +364,68 @@ static inline void hub75_data_rgb888_set_shift(PIO pio, uint sm, uint offset, ui
         instr = pio_encode_out(pio_null, shamt);
     pio->instr_mem[offset + hub75_data_rgb888_offset_shift0] = instr;
     pio->instr_mem[offset + hub75_data_rgb888_offset_shift1] = instr;
+}
+%}
+
+.program hub75_data_rgb888_invclk
+.side_set 1
+
+public entry_point_invclk:
+.wrap_target
+
+public shift0_invclk:
+    pull             side 1
+    in osr, 1        side 1
+    out null, 10     side 1
+
+    in osr, 1        side 1
+    out null, 10     side 1
+
+    in osr, 1        side 1
+    out null, 32     side 1
+
+public shift1_invclk:
+    pull             side 1
+    in osr, 1        side 0
+    out null, 10     side 0
+
+    in osr, 1        side 0
+    out null, 10     side 0
+
+    in osr, 1        side 0
+    out null, 32     side 0
+
+    in null, 26      side 0
+    mov pins, ::isr  side 0
+
+.wrap
+
+% c-sdk {
+static inline void hub75_data_rgb888_invclk_program_init(PIO pio, uint sm, uint offset, uint rgb_base_pin, uint clock_pin) {
+    pio_sm_set_consecutive_pindirs(pio, sm, rgb_base_pin, 6, true);
+    pio_sm_set_consecutive_pindirs(pio, sm, clock_pin, 1, true);
+    for (uint i = rgb_base_pin; i < rgb_base_pin + 6; ++i)
+        pio_gpio_init(pio, i);
+    pio_gpio_init(pio, clock_pin);
+
+    pio_sm_config c = hub75_data_rgb888_invclk_program_get_default_config(offset);
+    sm_config_set_out_pins(&c, rgb_base_pin, 6);
+    sm_config_set_sideset_pins(&c, clock_pin);
+    sm_config_set_out_shift(&c, true, true, 32);
+    sm_config_set_in_shift(&c, false, false, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_exec(pio, sm, offset + hub75_data_rgb888_invclk_offset_entry_point_invclk);
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void hub75_data_rgb888_invclk_set_shift(PIO pio, uint sm, uint offset, uint shamt) {
+    uint16_t instr;
+    if (shamt == 0)
+        instr = pio_encode_pull(false, true);
+    else
+        instr = pio_encode_out(pio_null, shamt);
+    pio->instr_mem[offset + hub75_data_rgb888_invclk_offset_shift0_invclk] = instr;
+    pio->instr_mem[offset + hub75_data_rgb888_invclk_offset_shift1_invclk] = instr;
 }
 %}

@@ -1,7 +1,7 @@
 {
   "name": "pimoroni-pico",
   "description": "pimoroni-pico hub75 driver, adjusted for ZeDMD",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "downloadUrl": "https://github.com/PPUC/pimoroni-pico/archive/zedmd.zip",
   "frameworks": "arduino",
   "platforms": "raspberrypi",
