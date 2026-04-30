@@ -34,6 +34,18 @@ void pulse_panel_clock(const Hub75 &hub75) {
     gpio_put(hub75.pin_clk, !hub75.clk_polarity);
 }
 
+inline void shiftreg_timing_delay() {
+    asm volatile(
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "nop\n"
+        "nop\n");
+}
+
 } // namespace
 
 Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order,
@@ -229,11 +241,19 @@ void Hub75::init_shiftreg_rows() {
 void Hub75::step_shiftreg_row(uint row) const {
     gpio_put(pin_row_b, 1);
     gpio_put(pin_row_c, row == 0);
+    shiftreg_timing_delay();
     gpio_put(pin_row_a, 1);
+    shiftreg_timing_delay();
     gpio_put(pin_row_a, 0);
+    shiftreg_timing_delay();
     gpio_put(pin_row_b, 0);
     if (row == 0) {
         gpio_put(pin_row_c, 0);
+        // Some SM5368/DP3246 panels need one extra clear clock after seeding row 0.
+        shiftreg_timing_delay();
+        gpio_put(pin_row_a, 1);
+        shiftreg_timing_delay();
+        gpio_put(pin_row_a, 0);
     }
 }
 
