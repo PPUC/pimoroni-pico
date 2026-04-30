@@ -165,6 +165,7 @@ class Hub75 {
 
     uint data_prog_offs = 0;
     uint row_prog_offs = 0;
+    bool shiftreg_row_preloaded = false;
 
     uint brightness = 6;
 

@@ -278,6 +278,7 @@ void Hub75::start(irq_handler_t handler) {
         if (line_decoder == LINE_DECODER_TYPE595) {
           init_shiftreg_rows();
           step_shiftreg_row(0);
+          shiftreg_row_preloaded = true;
           if (shift_driver == SHIFT_DRIVER_DP3246) {
             if (inverted_stb) {
               pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_inverted_program, &pio, &sm_row,
@@ -356,6 +357,7 @@ void Hub75::start(irq_handler_t handler) {
 }
 
 void Hub75::stop(irq_handler_t handler) {
+    shiftreg_row_preloaded = false;
 
     irq_set_enabled(DMA_IRQ_0, false);
 
@@ -447,9 +449,10 @@ void Hub75::dma_complete() {
     if(dma_channel_get_irq0_status(dma_channel)) {
         dma_channel_acknowledge_irq0(dma_channel);
 
-        // Push out a dummy pixel for each row
-        pio_sm_put_blocking(pio, sm_data, 0);
-        pio_sm_put_blocking(pio, sm_data, 0);
+        // Fully flush the pixel shifter before latching the next row.
+        for (int i = 0; i < 8; ++i) {
+            pio_sm_put_blocking(pio, sm_data, 0);
+        }
 
         // SM is finished when it stalls on empty TX FIFO
         hub75_wait_tx_stall(pio, sm_data);
@@ -458,7 +461,11 @@ void Hub75::dma_complete() {
         hub75_wait_tx_stall(pio, sm_row);
 
         if (line_decoder == LINE_DECODER_TYPE595) {
-            step_shiftreg_row(row);
+            if (shiftreg_row_preloaded) {
+                shiftreg_row_preloaded = false;
+            } else {
+                step_shiftreg_row(row);
+            }
         }
 
         // Latch row data, pulse output enable for new row.
