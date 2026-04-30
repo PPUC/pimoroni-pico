@@ -58,7 +58,7 @@ void Hub75_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind
     mp_print_str(print, " x ");
     mp_obj_print_helper(print, mp_obj_new_int(self->hub75->height), PRINT_REPR);
 
-    switch(self->hub75->panel_type) {
+    switch(self->hub75->legacy_panel_type()) {
         case PANEL_GENERIC:
             mp_print_str(print, ", panel: generic ");
             break;

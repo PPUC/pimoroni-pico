@@ -38,7 +38,7 @@ void pulse_panel_clock(const Hub75 &hub75) {
 
 Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order,
   uint16_t *lut_table, PIO pio, ShiftDriver shift_driver, LineDecoder line_decoder)
- : width(width), height(height), panel_type(panel_type), inverted_stb(inverted_stb), color_order(color_order),
+ : width(width), height(height), inverted_stb(inverted_stb), color_order(color_order),
   lut_table(lut_table), pio(pio)
  {
     this->shift_driver = (shift_driver == SHIFT_DRIVER_SHIFTREG) ? panel_type_to_shift_driver(panel_type) : shift_driver;
@@ -454,6 +454,15 @@ uint32_t Hub75::encode_row_payload(uint row, uint bit) const {
     }
 
     return row | (oe_width << 5);
+}
+
+PanelType Hub75::legacy_panel_type() const {
+    switch (shift_driver) {
+        case SHIFT_DRIVER_FM6126A:
+            return PANEL_FM6126A;
+        default:
+            return PANEL_GENERIC;
+    }
 }
 
 void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y, int g_width, int g_height) {

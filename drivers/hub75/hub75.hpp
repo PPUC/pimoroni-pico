@@ -108,6 +108,7 @@ enum PanelType {
     PANEL_FM6126A,
 };
 
+// Legacy compatibility selector. New hardware-specific behavior should use ShiftDriver.
 enum ShiftDriver {
     SHIFT_DRIVER_SHIFTREG = 0,
     SHIFT_DRIVER_FM6124,
@@ -146,7 +147,6 @@ class Hub75 {
     Pixel *render_back_buffer = nullptr;
     Pixel *draw_back_buffer = nullptr;
     bool managed_buffer = false;
-    PanelType panel_type;
     ShiftDriver shift_driver;
     LineDecoder line_decoder;
     bool inverted_stb = false;
@@ -209,6 +209,9 @@ class Hub75 {
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb,
       COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0,
       ShiftDriver shift_driver = SHIFT_DRIVER_SHIFTREG, LineDecoder line_decoder = LINE_DECODER_TYPE138);
+    Hub75(uint width, uint height, Pixel *buffer, ShiftDriver shift_driver, LineDecoder line_decoder, bool inverted_stb,
+      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0)
+      : Hub75(width, height, buffer, PANEL_GENERIC, inverted_stb, color_order, lut_table, pio, shift_driver, line_decoder) {};
     ~Hub75();
 
     void FM6126A_write_register(uint16_t value, uint8_t position);
@@ -223,6 +226,7 @@ class Hub75 {
     void stop(irq_handler_t handler);
     void dma_complete();
     uint32_t encode_row_payload(uint row, uint bit) const;
+    PanelType legacy_panel_type() const;
 #ifndef NO_PICO_GRAPHICS
     void update(PicoGraphics *graphics);
 #endif
