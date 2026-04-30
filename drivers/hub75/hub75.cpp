@@ -516,6 +516,18 @@ PanelType Hub75::legacy_panel_type() const {
 }
 
 int Hub75::buffer_offset(uint x, uint y) const {
+    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
+        x = (x + 2) % width;
+
+        if(y >= height / 2) {
+            y -= height / 2;
+            y = (y + 1) % (height / 2);
+            return (y * width + x) * 2 + 1;
+        }
+
+        return (y * width + x) * 2;
+    }
+
     if(y >= height / 2) {
         y -= height / 2;
         return (y * width + x) * 2 + 1;
