@@ -336,7 +336,7 @@ void Hub75::start(irq_handler_t handler) {
         } else {
             hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
         }
-        dma_channel_set_trans_count(dma_channel, dma_words_per_row(), false);
+        dma_channel_set_trans_count(dma_channel, width * 2, false);
         dma_channel_set_read_addr(dma_channel, render_back_buffer, true);
     }
 }
@@ -458,7 +458,7 @@ void Hub75::dma_complete() {
 
         row++;
 
-        if(row == logical_row_count()) {
+        if(row == height / 2) {
             row = 0;
             bit++;
             if (bit == BIT_DEPTH) {
@@ -471,8 +471,8 @@ void Hub75::dma_complete() {
             }
         }
 
-        dma_channel_set_trans_count(dma_channel, dma_words_per_row(), false);
-        dma_channel_set_read_addr(dma_channel, &render_back_buffer[row * dma_words_per_row()], true);
+        dma_channel_set_trans_count(dma_channel, width * 2, false);
+        dma_channel_set_read_addr(dma_channel, &render_back_buffer[row * width * 2], true);
     }
 }
 
@@ -495,56 +495,7 @@ PanelType Hub75::legacy_panel_type() const {
     }
 }
 
-uint Hub75::scan_parallel_rows() const {
-    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595 && height == 64) {
-        return 4;
-    }
-    return 2;
-}
-
-uint Hub75::dma_words_per_row() const {
-    return width * scan_parallel_rows();
-}
-
-uint Hub75::logical_row_count() const {
-    return height / scan_parallel_rows();
-}
-
-void Hub75::remap_panel_coords(uint x, uint y, uint &mapped_x, uint &mapped_y) const {
-    mapped_x = x;
-    mapped_y = y;
-
-    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
-        // Match the ESP32 VirtualMatrixPanel FOUR_SCAN_64PX_HIGH remap.
-        uint remapped_y = y;
-        if ((remapped_y & 8u) != ((remapped_y & 16u) >> 1u)) {
-            remapped_y = ((remapped_y & 0b11000u) ^ 0b11000u) + (remapped_y & 0b11100111u);
-        }
-
-        if ((remapped_y & 8u) == 0) {
-            mapped_x = x + width;
-        } else {
-            mapped_x = x;
-        }
-
-        mapped_y = ((remapped_y >> 4u) * 8u) + (remapped_y & 0b111u);
-    }
-}
-
 int Hub75::buffer_offset(uint x, uint y) const {
-    if (scan_parallel_rows() == 4) {
-        uint mapped_x;
-        uint mapped_y;
-        remap_panel_coords(x, y, mapped_x, mapped_y);
-
-        const uint scan_width = width * 2;
-        if(mapped_y >= height / 4) {
-            mapped_y -= height / 4;
-            return (mapped_y * scan_width + mapped_x) * 2 + 1;
-        }
-        return (mapped_y * scan_width + mapped_x) * 2;
-    }
-
     if(y >= height / 2) {
         y -= height / 2;
         return (y * width + x) * 2 + 1;
@@ -570,19 +521,17 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 basex = width / 2;
             }
 
-            if (scan_parallel_rows() != 4) {
-                // Interlace the top and bottom halves of the panel.
-                // Since these are scanned out simultaneously to two chains
-                // of shift registers we need each pair of rows
-                // (N and N + height / 2) to be adjacent in the buffer.
-                offsety = width * 2;
-                if(sy >= int(height / 2)) {
-                    sy -= height / 2;
-                    offsety *= sy;
-                    offsety += 1;
-                } else {
-                    offsety *= sy;
-                }
+            // Interlace the top and bottom halves of the panel.
+            // Since these are scanned out simultaneously to two chains
+            // of shift registers we need each pair of rows
+            // (N and N + height / 2) to be adjacent in the buffer.
+            offsety = width * 2;
+            if(sy >= int(height / 2)) {
+                sy -= height / 2;
+                offsety *= sy;
+                offsety += 1;
+            } else {
+                offsety *= sy;
             }
 
             for(int x = start_x; x < g_width; x++) {
@@ -597,7 +546,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 } else {
                     sx += basex;
                 }
-                int offset = scan_parallel_rows() == 4 ? buffer_offset(sx, sy) : offsety + sx * 2;
+                int offset = offsety + sx * 2;
 
                 draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
