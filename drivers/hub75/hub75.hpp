@@ -54,6 +54,15 @@
 #ifndef HUB75_OE
 #define HUB75_OE 13
 #endif
+#ifndef HUB75_CLK2
+#define HUB75_CLK2 HUB75_CLK
+#endif
+#ifndef HUB75_LAT2
+#define HUB75_LAT2 HUB75_LAT
+#endif
+#ifndef HUB75_OE2
+#define HUB75_OE2 HUB75_OE
+#endif
 
 namespace pimoroni {
 const uint DATA_BASE_PIN = HUB75_R0;
@@ -156,15 +165,20 @@ class Hub75 {
 
     // DMA & PIO
     int dma_channel = -1;
+    int dma_channel_b = -1;
     uint bit = 0;
     uint row = 0;
 
     PIO pio;
     uint sm_data = 0;
     uint sm_row = 1;
+    uint sm_data_b = 2;
+    uint sm_row_b = 3;
 
     uint data_prog_offs = 0;
     uint row_prog_offs = 0;
+    bool data_program_added = false;
+    bool row_program_added = false;
     bool shiftreg_row_preloaded = false;
 
     uint brightness = 6;
@@ -191,6 +205,10 @@ class Hub75 {
     unsigned int pin_clk = HUB75_CLK;    // Clock
     unsigned int pin_stb = HUB75_LAT;    // Strobe/Latch
     unsigned int pin_oe = HUB75_OE;      // Output Enable
+    unsigned int pin_clk2 = HUB75_CLK2;  // Clock for panel 2
+    unsigned int pin_stb2 = HUB75_LAT2;  // Strobe/Latch for panel 2
+    unsigned int pin_oe2 = HUB75_OE2;    // Output Enable for panel 2
+    bool split_controls = false;
 
     const bool clk_polarity = 1;
     const bool stb_polarity = 1;
@@ -229,6 +247,8 @@ class Hub75 {
     uint32_t encode_row_payload(uint row, uint bit) const;
     PanelType legacy_panel_type() const;
     int buffer_offset(uint x, uint y) const;
+    uint panel_width() const;
+    Pixel *row_buffer_ptr(uint row, uint phase) const;
     // Number of dummy pixels needed after each row before latching the next row.
     // Some shift-driver / line-decoder combinations need more trailing clocks.
     uint end_of_row_dummy_pixels() const;
