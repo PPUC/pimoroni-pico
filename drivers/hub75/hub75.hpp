@@ -228,6 +228,10 @@ class Hub75 {
     void dma_complete();
     uint32_t encode_row_payload(uint row, uint bit) const;
     PanelType legacy_panel_type() const;
+    uint scan_parallel_rows() const;
+    uint dma_words_per_row() const;
+    uint logical_row_count() const;
+    int buffer_offset(uint x, uint y) const;
     void init_shiftreg_rows();
     void step_shiftreg_row(uint row) const;
 #ifndef NO_PICO_GRAPHICS

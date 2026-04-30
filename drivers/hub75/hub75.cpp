@@ -124,29 +124,13 @@ Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool 
 }
 
 void Hub75::set_color(uint x, uint y, Pixel c) {
-    int offset = 0;
     if(x >= width || y >= height) return;
-    if(y >= height / 2) {
-        y -= height / 2;
-        offset = (y * width + x) * 2;
-        offset += 1;
-    } else {
-        offset = (y * width + x) * 2;
-    }
-    draw_back_buffer[offset] = c;
+    draw_back_buffer[buffer_offset(x, y)] = c;
 }
 
 void Hub75::set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b) {
-    int offset = 0;
     if(x >= width || y >= height) return;
-    if(y >= height / 2) {
-        y -= height / 2;
-        offset = (y * width + x) * 2;
-        offset += 1;
-    } else {
-        offset = (y * width + x) * 2;
-    }
-    draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
+    draw_back_buffer[buffer_offset(x, y)] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 }
 
 void Hub75::FM6126A_write_register(uint16_t value, uint8_t position) {
@@ -352,7 +336,7 @@ void Hub75::start(irq_handler_t handler) {
         } else {
             hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
         }
-        dma_channel_set_trans_count(dma_channel, width * 2, false);
+        dma_channel_set_trans_count(dma_channel, dma_words_per_row(), false);
         dma_channel_set_read_addr(dma_channel, render_back_buffer, true);
     }
 }
@@ -474,7 +458,7 @@ void Hub75::dma_complete() {
 
         row++;
 
-        if(row == height / 2) {
+        if(row == logical_row_count()) {
             row = 0;
             bit++;
             if (bit == BIT_DEPTH) {
@@ -487,8 +471,8 @@ void Hub75::dma_complete() {
             }
         }
 
-        dma_channel_set_trans_count(dma_channel, width * 2, false);
-        dma_channel_set_read_addr(dma_channel, &render_back_buffer[row * width * 2], true);
+        dma_channel_set_trans_count(dma_channel, dma_words_per_row(), false);
+        dma_channel_set_read_addr(dma_channel, &render_back_buffer[row * dma_words_per_row()], true);
     }
 }
 
@@ -511,6 +495,49 @@ PanelType Hub75::legacy_panel_type() const {
     }
 }
 
+uint Hub75::scan_parallel_rows() const {
+    if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595 && height == 64) {
+        return 4;
+    }
+    return 2;
+}
+
+uint Hub75::dma_words_per_row() const {
+    return width * scan_parallel_rows();
+}
+
+uint Hub75::logical_row_count() const {
+    return height / scan_parallel_rows();
+}
+
+int Hub75::buffer_offset(uint x, uint y) const {
+    if (scan_parallel_rows() == 4) {
+        const uint quarter_rows = height / 4;
+        const uint line_width = width * 2;
+        const uint local_y = y % quarter_rows;
+        const uint group = y / quarter_rows;
+        const uint base = local_y * width * 4 + x * 2;
+
+        switch (group) {
+            case 0:
+                return base + line_width;
+            case 1:
+                return base;
+            case 2:
+                return base + line_width + 1;
+            case 3:
+            default:
+                return base + 1;
+        }
+    }
+
+    if(y >= height / 2) {
+        y -= height / 2;
+        return (y * width + x) * 2 + 1;
+    }
+    return (y * width + x) * 2;
+}
+
 void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y, int g_width, int g_height) {
     uint8_t *p = (uint8_t *)data;
 
@@ -529,17 +556,19 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 basex = width / 2;
             }
 
-            // Interlace the top and bottom halves of the panel.
-            // Since these are scanned out simultaneously to two chains
-            // of shift registers we need each pair of rows
-            // (N and N + height / 2) to be adjacent in the buffer.
-            offsety = width * 2;
-            if(sy >= int(height / 2)) {
-                sy -= height / 2;
-                offsety *= sy;
-                offsety += 1;
-            } else {
-                offsety *= sy;
+            if (scan_parallel_rows() != 4) {
+                // Interlace the top and bottom halves of the panel.
+                // Since these are scanned out simultaneously to two chains
+                // of shift registers we need each pair of rows
+                // (N and N + height / 2) to be adjacent in the buffer.
+                offsety = width * 2;
+                if(sy >= int(height / 2)) {
+                    sy -= height / 2;
+                    offsety *= sy;
+                    offsety += 1;
+                } else {
+                    offsety *= sy;
+                }
             }
 
             for(int x = start_x; x < g_width; x++) {
@@ -554,7 +583,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 } else {
                     sx += basex;
                 }
-                int offset = offsety + sx * 2;
+                int offset = scan_parallel_rows() == 4 ? buffer_offset(sx, sy) : offsety + sx * 2;
 
                 draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
@@ -578,19 +607,7 @@ void Hub75::copy_to_back_buffer(void *data, size_t len, int start_x, int start_y
                 uint8_t g = *p++;
                 uint8_t r = *p++;
 
-                // Interlace the top and bottom halves of the panel.
-                // Since these are scanned out simultaneously to two chains
-                // of shift registers we need each pair of rows
-                // (N and N + height / 2) to be adjacent in the buffer.
-                offset = width * 2;
-                if(sy >= int(height / 2)) {
-                    sy -= height / 2;
-                    offset *= sy;
-                    offset += 1;
-                } else {
-                    offset *= sy;
-                }
-                offset += sx * 2;
+                offset = buffer_offset(sx, sy);
 
                 draw_back_buffer[offset] = (lut_table[b] << b_shift) | (lut_table[g] << g_shift) | (lut_table[r] << r_shift);
 
