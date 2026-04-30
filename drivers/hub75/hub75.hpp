@@ -229,7 +229,10 @@ class Hub75 {
     uint32_t encode_row_payload(uint row, uint bit) const;
     PanelType legacy_panel_type() const;
     int buffer_offset(uint x, uint y) const;
+    // Number of dummy pixels needed after each row before latching the next row.
+    // Some shift-driver / line-decoder combinations need more trailing clocks.
     uint end_of_row_dummy_pixels() const;
+    // TYPE595 panels use a serial row decoder. These helpers seed and advance it.
     void init_shiftreg_rows();
     void step_shiftreg_row(uint row) const;
 #ifndef NO_PICO_GRAPHICS

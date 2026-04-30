@@ -34,6 +34,7 @@ void pulse_panel_clock(const Hub75 &hub75) {
     gpio_put(hub75.pin_clk, !hub75.clk_polarity);
 }
 
+// Small setup/hold delay for GPIO-driven serial row decoder updates.
 inline void shiftreg_timing_delay() {
     asm volatile(
         "nop\n"
@@ -229,6 +230,7 @@ void Hub75::DP3246_setup() {
 }
 
 void Hub75::init_shiftreg_rows() {
+    // TYPE595-style row decoders use A=row clock, B=BK, C=row data.
     gpio_init(pin_row_a); gpio_set_function(pin_row_a, GPIO_FUNC_SIO); gpio_set_dir(pin_row_a, true);
     gpio_init(pin_row_b); gpio_set_function(pin_row_b, GPIO_FUNC_SIO); gpio_set_dir(pin_row_b, true);
     gpio_init(pin_row_c); gpio_set_function(pin_row_c, GPIO_FUNC_SIO); gpio_set_dir(pin_row_c, true);
@@ -239,6 +241,7 @@ void Hub75::init_shiftreg_rows() {
 }
 
 void Hub75::step_shiftreg_row(uint row) const {
+    // Seed the shift register when wrapping back to row 0, otherwise shift in 0s.
     gpio_put(pin_row_b, 1);
     gpio_put(pin_row_c, row == 0);
     shiftreg_timing_delay();
@@ -276,6 +279,7 @@ void Hub75::start(irq_handler_t handler) {
               &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
         }
         if (line_decoder == LINE_DECODER_TYPE595) {
+          // TYPE595 panels keep row selection outside the row PIO program.
           init_shiftreg_rows();
           step_shiftreg_row(0);
           shiftreg_row_preloaded = true;
@@ -454,6 +458,7 @@ void Hub75::dma_complete() {
 
         if (line_decoder == LINE_DECODER_TYPE595) {
             if (shiftreg_row_preloaded) {
+                // Row 0 was already seeded during startup.
                 shiftreg_row_preloaded = false;
             } else {
                 step_shiftreg_row(row);
@@ -527,6 +532,7 @@ int Hub75::buffer_offset(uint x, uint y) const {
 
 uint Hub75::end_of_row_dummy_pixels() const {
     if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
+        // DP3246 + TYPE595 needs a longer tail so LAT overlaps the final clocks cleanly.
         return 6;
     }
     return 2;
