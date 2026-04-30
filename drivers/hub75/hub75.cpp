@@ -249,11 +249,6 @@ void Hub75::step_shiftreg_row(uint row) const {
     gpio_put(pin_row_b, 0);
     if (row == 0) {
         gpio_put(pin_row_c, 0);
-        // Some SM5368/DP3246 panels need one extra clear clock after seeding row 0.
-        shiftreg_timing_delay();
-        gpio_put(pin_row_a, 1);
-        shiftreg_timing_delay();
-        gpio_put(pin_row_a, 0);
     }
 }
 
