@@ -143,7 +143,7 @@ mp_obj_t Hub75_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, c
 
     hub75_obj = mp_obj_malloc_with_finaliser(_Hub75_obj_t, &Hub75_type);
     hub75_obj->buf = buffer;
-    hub75_obj->hub75 = m_new_class(Hub75, width, height, buffer, paneltype, stb_invert, color_order, GAMMA_10BIT, pio0, shift_driver, line_decoder);
+    hub75_obj->hub75 = m_new_class(Hub75, width, height, buffer, paneltype, stb_invert, color_order, GAMMA_10BIT, shift_driver, line_decoder);
 
     return MP_OBJ_FROM_PTR(hub75_obj);
 }

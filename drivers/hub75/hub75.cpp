@@ -73,9 +73,9 @@ bool uses_dp3246_type595(const Hub75 &hub75) {
 } // namespace
 
 Hub75::Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb, COLOR_ORDER color_order,
-  uint16_t *lut_table, PIO pio, ShiftDriver shift_driver, LineDecoder line_decoder)
+  uint16_t *lut_table, ShiftDriver shift_driver, LineDecoder line_decoder)
  : width(width), height(height), inverted_stb(inverted_stb), color_order(color_order),
-  lut_table(lut_table), pio(pio)
+  lut_table(lut_table), pio(nullptr)
  {
     this->shift_driver = (shift_driver == SHIFT_DRIVER_SHIFTREG) ? panel_type_to_shift_driver(panel_type) : shift_driver;
     this->line_decoder = line_decoder;

@@ -224,11 +224,11 @@ class Hub75 {
     Hub75(uint width, uint height, Pixel *buffer) : Hub75(width, height, buffer, PANEL_GENERIC) {};
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type) : Hub75(width, height, buffer, panel_type, false) {};
     Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb,
-      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0,
+      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT,
       ShiftDriver shift_driver = SHIFT_DRIVER_SHIFTREG, LineDecoder line_decoder = LINE_DECODER_TYPE138);
     Hub75(uint width, uint height, Pixel *buffer, ShiftDriver shift_driver, LineDecoder line_decoder, bool inverted_stb,
-      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT, PIO pio = pio0)
-      : Hub75(width, height, buffer, PANEL_GENERIC, inverted_stb, color_order, lut_table, pio, shift_driver, line_decoder) {};
+      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT)
+      : Hub75(width, height, buffer, PANEL_GENERIC, inverted_stb, color_order, lut_table, shift_driver, line_decoder) {};
     ~Hub75();
 
     void FM6126A_write_register(uint16_t value, uint8_t position);
