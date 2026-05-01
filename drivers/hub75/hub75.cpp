@@ -1,6 +1,7 @@
 #include <cstring>
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 #include "hardware/clocks.h"
 
@@ -34,17 +35,35 @@ void pulse_panel_clock_pin(uint clock_pin, bool clock_polarity) {
     gpio_put(clock_pin, !clock_polarity);
 }
 
+uint32_t system_clock_hz() {
+    return clock_get_hz(clk_sys);
+}
+
+uint32_t latch_cycles_for_system_clock() {
+    return std::max<uint32_t>(1u, system_clock_hz() / 4000000u);
+}
+
+uint32_t shiftreg_delay_cycles() {
+    return std::max<uint32_t>(8u, (uint32_t)(((uint64_t)system_clock_hz() * 8u + 124999999u) / 125000000u));
+}
+
+float panel_data_clkdiv(uint panel_width) {
+    float base_div = panel_width <= 32 ? 2.0f : 1.0f;
+    float clock_scale = (float)system_clock_hz() / 125000000.0f;
+    return std::max(base_div, base_div * clock_scale);
+}
+
+uint range_min(std::initializer_list<uint> pins) {
+    return *std::min_element(pins.begin(), pins.end());
+}
+
+uint range_max(std::initializer_list<uint> pins) {
+    return *std::max_element(pins.begin(), pins.end());
+}
+
 // Small setup/hold delay for GPIO-driven serial row decoder updates.
 inline void shiftreg_timing_delay() {
-    asm volatile(
-        "nop\n"
-        "nop\n"
-        "nop\n"
-        "nop\n"
-        "nop\n"
-        "nop\n"
-        "nop\n"
-        "nop\n");
+    busy_wait_at_least_cycles(shiftreg_delay_cycles());
 }
 
 bool uses_dp3246_type595(const Hub75 &hub75) {
@@ -294,7 +313,7 @@ void Hub75::start(irq_handler_t handler) {
                 break;
         }
 
-        uint latch_cycles = clock_get_hz(clk_sys) / 4000000;
+        uint latch_cycles = latch_cycles_for_system_clock();
 
         if (line_decoder == LINE_DECODER_TYPE595) {
             // TYPE595 panels keep row selection outside the row PIO program.
@@ -303,78 +322,68 @@ void Hub75::start(irq_handler_t handler) {
             shiftreg_row_preloaded = true;
         }
 
-        if (!split_controls) {
-            // Claim the PIO so we can clean it upon soft restart.
-            if (shift_driver == SHIFT_DRIVER_DP3246) {
-                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_invclk_program, &pio, &sm_data,
-                  &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
-            } else {
-                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_program, &pio, &sm_data,
-                  &data_prog_offs, DATA_BASE_PIN, DATA_N_PINS, true);
-            }
+        uint data_range_base = DATA_BASE_PIN;
+        uint data_range_count = DATA_N_PINS;
+        uint row_range_base = line_decoder == LINE_DECODER_TYPE595 ? pin_stb : ROWSEL_BASE_PIN;
+        uint row_range_count = line_decoder == LINE_DECODER_TYPE595 ? 2 : ROWSEL_N_PINS;
+
+        if (split_controls) {
+            data_range_base = range_min({DATA_BASE_PIN, pin_clk, pin_clk2});
+            data_range_count = range_max({DATA_BASE_PIN + DATA_N_PINS - 1, pin_clk, pin_clk2}) - data_range_base + 1;
+
             if (line_decoder == LINE_DECODER_TYPE595) {
-                if (shift_driver == SHIFT_DRIVER_DP3246) {
-                    if (inverted_stb) {
-                        pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_inverted_program, &pio, &sm_row,
-                          &row_prog_offs, pin_stb, 2, true);
-                    } else {
-                        pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_program, &pio, &sm_row,
-                          &row_prog_offs, pin_stb, 2, true);
-                    }
-                } else if (inverted_stb) {
-                    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_inverted_program, &pio, &sm_row,
-                      &row_prog_offs, pin_stb, 2, true);
-                } else {
-                    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_program, &pio, &sm_row,
-                      &row_prog_offs, pin_stb, 2, true);
-                }
-            } else if (shift_driver == SHIFT_DRIVER_DP3246) {
+                row_range_base = range_min({pin_stb, pin_stb + 1, pin_stb2, pin_stb2 + 1});
+                row_range_count = range_max({pin_stb, pin_stb + 1, pin_stb2, pin_stb2 + 1}) - row_range_base + 1;
+            } else {
+                row_range_base = range_min({ROWSEL_BASE_PIN, ROWSEL_BASE_PIN + ROWSEL_N_PINS - 1, pin_stb, pin_stb + 1, pin_stb2, pin_stb2 + 1});
+                row_range_count = range_max({ROWSEL_BASE_PIN, ROWSEL_BASE_PIN + ROWSEL_N_PINS - 1, pin_stb, pin_stb + 1, pin_stb2, pin_stb2 + 1}) - row_range_base + 1;
+            }
+        }
+
+        if (shift_driver == SHIFT_DRIVER_DP3246) {
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_invclk_program, &pio, &sm_data,
+              &data_prog_offs, data_range_base, data_range_count, true);
+        } else {
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_program, &pio, &sm_data,
+              &data_prog_offs, data_range_base, data_range_count, true);
+        }
+
+        if (line_decoder == LINE_DECODER_TYPE595) {
+            if (shift_driver == SHIFT_DRIVER_DP3246) {
                 if (inverted_stb) {
-                    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_dp3246_inverted_program, &pio, &sm_row,
-                      &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
+                    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_inverted_program, &pio, &sm_row,
+                      &row_prog_offs, row_range_base, row_range_count, true);
                 } else {
-                    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_dp3246_program, &pio, &sm_row,
-                      &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
+                    pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_program, &pio, &sm_row,
+                      &row_prog_offs, row_range_base, row_range_count, true);
                 }
             } else if (inverted_stb) {
-                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_inverted_program, &pio, &sm_row,
-                  &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
+                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_inverted_program, &pio, &sm_row,
+                  &row_prog_offs, row_range_base, row_range_count, true);
             } else {
-                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_program, &pio, &sm_row,
-                  &row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, true);
+                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_program, &pio, &sm_row,
+                  &row_prog_offs, row_range_base, row_range_count, true);
             }
+        } else if (shift_driver == SHIFT_DRIVER_DP3246) {
+            if (inverted_stb) {
+                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_dp3246_inverted_program, &pio, &sm_row,
+                  &row_prog_offs, row_range_base, row_range_count, true);
+            } else {
+                pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_dp3246_program, &pio, &sm_row,
+                  &row_prog_offs, row_range_base, row_range_count, true);
+            }
+        } else if (inverted_stb) {
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_inverted_program, &pio, &sm_row,
+              &row_prog_offs, row_range_base, row_range_count, true);
         } else {
-            // Two independent control-pin triplets drive the left and right half-panels.
-            // RGB data and row-select signals stay shared, so we alternate the two halves.
-            data_prog_offs = shift_driver == SHIFT_DRIVER_DP3246
-              ? pio_add_program(pio, &hub75_data_rgb888_invclk_program)
-              : pio_add_program(pio, &hub75_data_rgb888_program);
-            data_program_added = true;
+            pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_program, &pio, &sm_row,
+              &row_prog_offs, row_range_base, row_range_count, true);
+        }
 
-            if (line_decoder == LINE_DECODER_TYPE595) {
-                if (shift_driver == SHIFT_DRIVER_DP3246) {
-                    row_prog_offs = inverted_stb
-                      ? pio_add_program(pio, &hub75_row_noaddr_dp3246_inverted_program)
-                      : pio_add_program(pio, &hub75_row_noaddr_dp3246_program);
-                } else {
-                    row_prog_offs = inverted_stb
-                      ? pio_add_program(pio, &hub75_row_noaddr_inverted_program)
-                      : pio_add_program(pio, &hub75_row_noaddr_program);
-                }
-            } else if (shift_driver == SHIFT_DRIVER_DP3246) {
-                row_prog_offs = inverted_stb
-                  ? pio_add_program(pio, &hub75_row_dp3246_inverted_program)
-                  : pio_add_program(pio, &hub75_row_dp3246_program);
-            } else {
-                row_prog_offs = inverted_stb
-                  ? pio_add_program(pio, &hub75_row_inverted_program)
-                  : pio_add_program(pio, &hub75_row_program);
-            }
-            row_program_added = true;
-
-            sm_data = pio_claim_unused_sm(pio, true);
+        if (split_controls) {
+            // The range-aware claims above selected a PIO/GPIO-base combination that can see
+            // all pins used by both heads, so the extra SMs can now be claimed directly.
             sm_data_b = pio_claim_unused_sm(pio, true);
-            sm_row = pio_claim_unused_sm(pio, true);
             sm_row_b = pio_claim_unused_sm(pio, true);
         }
 
@@ -411,7 +420,7 @@ void Hub75::start(irq_handler_t handler) {
         }
 
         // Prevent flicker in Python caused by the smaller dataset just blasting through the PIO too quickly.
-        float data_clkdiv = panel_width() <= 32 ? 2.0f : 1.0f;
+        float data_clkdiv = panel_data_clkdiv(panel_width());
         pio_sm_set_clkdiv(pio, sm_data, data_clkdiv);
         if (split_controls) {
             pio_sm_set_clkdiv(pio, sm_data_b, data_clkdiv);
@@ -485,89 +494,49 @@ void Hub75::stop(irq_handler_t handler) {
     if(pio_sm_is_claimed(pio, sm_data)) {
         pio_sm_set_enabled(pio, sm_data, false);
         pio_sm_drain_tx_fifo(pio, sm_data);
-        if (!split_controls) {
-            if (shift_driver == SHIFT_DRIVER_DP3246) {
-                pio_remove_program(pio, &hub75_data_rgb888_invclk_program, data_prog_offs);
-            } else {
-                pio_remove_program(pio, &hub75_data_rgb888_program, data_prog_offs);
-            }
+        if (shift_driver == SHIFT_DRIVER_DP3246) {
+            pio_remove_program_and_unclaim_sm(&hub75_data_rgb888_invclk_program, pio, sm_data, data_prog_offs);
+        } else {
+            pio_remove_program_and_unclaim_sm(&hub75_data_rgb888_program, pio, sm_data, data_prog_offs);
         }
-        pio_sm_unclaim(pio, sm_data);
     }
     if(split_controls && pio_sm_is_claimed(pio, sm_data_b)) {
         pio_sm_set_enabled(pio, sm_data_b, false);
         pio_sm_drain_tx_fifo(pio, sm_data_b);
         pio_sm_unclaim(pio, sm_data_b);
     }
-    if (split_controls && data_program_added) {
-        if (shift_driver == SHIFT_DRIVER_DP3246) {
-            pio_remove_program(pio, &hub75_data_rgb888_invclk_program, data_prog_offs);
-        } else {
-            pio_remove_program(pio, &hub75_data_rgb888_program, data_prog_offs);
-        }
-        data_program_added = false;
-    }
 
     if(pio_sm_is_claimed(pio, sm_row)) {
         pio_sm_set_enabled(pio, sm_row, false);
         pio_sm_drain_tx_fifo(pio, sm_row);
-        if (!split_controls) {
-            if (line_decoder == LINE_DECODER_TYPE595) {
-              if (shift_driver == SHIFT_DRIVER_DP3246) {
-                    if (inverted_stb) {
-                        pio_remove_program(pio, &hub75_row_noaddr_dp3246_inverted_program, row_prog_offs);
-                    } else {
-                        pio_remove_program(pio, &hub75_row_noaddr_dp3246_program, row_prog_offs);
-                    }
-                } else if (inverted_stb) {
-                    pio_remove_program(pio, &hub75_row_noaddr_inverted_program, row_prog_offs);
-                } else {
-                    pio_remove_program(pio, &hub75_row_noaddr_program, row_prog_offs);
-                }
-            } else if (shift_driver == SHIFT_DRIVER_DP3246) {
+        if (line_decoder == LINE_DECODER_TYPE595) {
+          if (shift_driver == SHIFT_DRIVER_DP3246) {
                 if (inverted_stb) {
-                    pio_remove_program(pio, &hub75_row_dp3246_inverted_program, row_prog_offs);
+                    pio_remove_program_and_unclaim_sm(&hub75_row_noaddr_dp3246_inverted_program, pio, sm_row, row_prog_offs);
                 } else {
-                    pio_remove_program(pio, &hub75_row_dp3246_program, row_prog_offs);
+                    pio_remove_program_and_unclaim_sm(&hub75_row_noaddr_dp3246_program, pio, sm_row, row_prog_offs);
                 }
             } else if (inverted_stb) {
-                pio_remove_program(pio, &hub75_row_inverted_program, row_prog_offs);
+                pio_remove_program_and_unclaim_sm(&hub75_row_noaddr_inverted_program, pio, sm_row, row_prog_offs);
             } else {
-                pio_remove_program(pio, &hub75_row_program, row_prog_offs);
+                pio_remove_program_and_unclaim_sm(&hub75_row_noaddr_program, pio, sm_row, row_prog_offs);
             }
+        } else if (shift_driver == SHIFT_DRIVER_DP3246) {
+            if (inverted_stb) {
+                pio_remove_program_and_unclaim_sm(&hub75_row_dp3246_inverted_program, pio, sm_row, row_prog_offs);
+            } else {
+                pio_remove_program_and_unclaim_sm(&hub75_row_dp3246_program, pio, sm_row, row_prog_offs);
+            }
+        } else if (inverted_stb) {
+            pio_remove_program_and_unclaim_sm(&hub75_row_inverted_program, pio, sm_row, row_prog_offs);
+        } else {
+            pio_remove_program_and_unclaim_sm(&hub75_row_program, pio, sm_row, row_prog_offs);
         }
-        pio_sm_unclaim(pio, sm_row);
     }
     if(split_controls && pio_sm_is_claimed(pio, sm_row_b)) {
         pio_sm_set_enabled(pio, sm_row_b, false);
         pio_sm_drain_tx_fifo(pio, sm_row_b);
         pio_sm_unclaim(pio, sm_row_b);
-    }
-    if (split_controls && row_program_added) {
-        if (line_decoder == LINE_DECODER_TYPE595) {
-            if (shift_driver == SHIFT_DRIVER_DP3246) {
-                if (inverted_stb) {
-                    pio_remove_program(pio, &hub75_row_noaddr_dp3246_inverted_program, row_prog_offs);
-                } else {
-                    pio_remove_program(pio, &hub75_row_noaddr_dp3246_program, row_prog_offs);
-                }
-            } else if (inverted_stb) {
-                pio_remove_program(pio, &hub75_row_noaddr_inverted_program, row_prog_offs);
-            } else {
-                pio_remove_program(pio, &hub75_row_noaddr_program, row_prog_offs);
-            }
-        } else if (shift_driver == SHIFT_DRIVER_DP3246) {
-            if (inverted_stb) {
-                pio_remove_program(pio, &hub75_row_dp3246_inverted_program, row_prog_offs);
-            } else {
-                pio_remove_program(pio, &hub75_row_dp3246_program, row_prog_offs);
-            }
-        } else if (inverted_stb) {
-            pio_remove_program(pio, &hub75_row_inverted_program, row_prog_offs);
-        } else {
-            pio_remove_program(pio, &hub75_row_program, row_prog_offs);
-        }
-        row_program_added = false;
     }
 
     // Make sure the GPIO is in a known good state
