@@ -639,84 +639,92 @@ void Hub75::dma_complete() {
         dma_channel_set_read_addr(dma_channel, row_buffer_ptr(row, 0), true);
     }
 
-    if (split_controls && !split_phase_b_active && dma_channel_get_irq0_status(dma_channel)) {
-        dma_channel_acknowledge_irq0(dma_channel);
+    if (split_controls) {
+        while (true) {
+            if (!split_phase_b_active && dma_channel_get_irq0_status(dma_channel)) {
+                dma_channel_acknowledge_irq0(dma_channel);
 
-        // Phase A advances the shared row state, so both heads must be fully blank first.
-        hub75_wait_tx_stall(pio, sm_row);
-        hub75_wait_tx_stall(pio, sm_row_b);
+                // Phase A advances the shared row state, so both heads must be fully blank first.
+                hub75_wait_tx_stall(pio, sm_row);
+                hub75_wait_tx_stall(pio, sm_row_b);
 
-        if (line_decoder == LINE_DECODER_TYPE595) {
-            if (shiftreg_row_preloaded) {
-                shiftreg_row_preloaded = false;
-            } else {
-                // Split-head mode shares the TYPE595 row decoder across both panels, so hold off
-                // briefly after both OEn pulses have finished before advancing the row register.
-                shiftreg_timing_delay();
-                shiftreg_timing_delay();
-                step_shiftreg_row(row);
+                if (line_decoder == LINE_DECODER_TYPE595) {
+                    if (shiftreg_row_preloaded) {
+                        shiftreg_row_preloaded = false;
+                    } else {
+                        // Split-head mode shares the TYPE595 row decoder across both panels, so hold off
+                        // briefly after both OEn pulses have finished before advancing the row register.
+                        shiftreg_timing_delay();
+                        shiftreg_timing_delay();
+                        step_shiftreg_row(row);
+                    }
+                }
+
+                if (uses_dp3246_type595(*this)) {
+                    pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
+                }
+
+                for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
+                    pio_sm_put_blocking(pio, sm_data, 0);
+                }
+
+                hub75_wait_tx_stall(pio, sm_data);
+
+                if (!uses_dp3246_type595(*this)) {
+                    pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
+                }
+
+                dma_channel_set_trans_count(dma_channel_b, panel_width() * 2, false);
+                dma_channel_set_read_addr(dma_channel_b, row_buffer_ptr(row, 1), true);
+                split_phase_b_active = true;
+                continue;
             }
-        }
 
-        if (uses_dp3246_type595(*this)) {
-            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-        }
+            if (split_phase_b_active && dma_channel_get_irq0_status(dma_channel_b)) {
+                dma_channel_acknowledge_irq0(dma_channel_b);
 
-        for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
-            pio_sm_put_blocking(pio, sm_data, 0);
-        }
+                // Phase B replays the same logical row on the right panel before advancing the scan.
+                hub75_wait_tx_stall(pio, sm_row_b);
 
-        hub75_wait_tx_stall(pio, sm_data);
+                if (uses_dp3246_type595(*this)) {
+                    pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
+                }
 
-        if (!uses_dp3246_type595(*this)) {
-            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-        }
+                for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
+                    pio_sm_put_blocking(pio, sm_data_b, 0);
+                }
 
-        dma_channel_set_trans_count(dma_channel_b, panel_width() * 2, false);
-        dma_channel_set_read_addr(dma_channel_b, row_buffer_ptr(row, 1), true);
-        split_phase_b_active = true;
-    }
+                hub75_wait_tx_stall(pio, sm_data_b);
 
-    if (split_controls && split_phase_b_active && dma_channel_get_irq0_status(dma_channel_b)) {
-        dma_channel_acknowledge_irq0(dma_channel_b);
+                if (!uses_dp3246_type595(*this)) {
+                    pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
+                }
 
-        // Phase B replays the same logical row on the right panel before advancing the scan.
-        hub75_wait_tx_stall(pio, sm_row_b);
+                row++;
 
-        if (uses_dp3246_type595(*this)) {
-            pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
-        }
+                if(row == height / 2) {
+                    row = 0;
+                    bit++;
+                    if (bit == BIT_DEPTH) {
+                        bit = 0;
+                    }
+                    if (shift_driver == SHIFT_DRIVER_DP3246) {
+                        hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
+                        hub75_data_rgb888_invclk_set_shift(pio, sm_data_b, data_prog_offs, bit);
+                    } else {
+                        hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
+                        hub75_data_rgb888_set_shift(pio, sm_data_b, data_prog_offs, bit);
+                    }
+                }
 
-        for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
-            pio_sm_put_blocking(pio, sm_data_b, 0);
-        }
-
-        hub75_wait_tx_stall(pio, sm_data_b);
-
-        if (!uses_dp3246_type595(*this)) {
-            pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
-        }
-
-        row++;
-
-        if(row == height / 2) {
-            row = 0;
-            bit++;
-            if (bit == BIT_DEPTH) {
-                bit = 0;
+                dma_channel_set_trans_count(dma_channel, panel_width() * 2, false);
+                dma_channel_set_read_addr(dma_channel, row_buffer_ptr(row, 0), true);
+                split_phase_b_active = false;
+                continue;
             }
-            if (shift_driver == SHIFT_DRIVER_DP3246) {
-                hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
-                hub75_data_rgb888_invclk_set_shift(pio, sm_data_b, data_prog_offs, bit);
-            } else {
-                hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
-                hub75_data_rgb888_set_shift(pio, sm_data_b, data_prog_offs, bit);
-            }
-        }
 
-        dma_channel_set_trans_count(dma_channel, panel_width() * 2, false);
-        dma_channel_set_read_addr(dma_channel, row_buffer_ptr(row, 0), true);
-        split_phase_b_active = false;
+            break;
+        }
     }
 }
 
