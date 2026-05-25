@@ -419,15 +419,7 @@ void Hub75::start(irq_handler_t handler) {
             }
         }
 
-        // Split-head routing is less forgiving than a single control triplet, especially with
-        // DP3246/TYPE595 panels, so give the data shifter a bit more setup/hold margin.
         float data_clkdiv = panel_data_clkdiv(panel_width());
-        if (split_controls) {
-            data_clkdiv = std::max(data_clkdiv, 2.0f);
-        }
-        if (uses_dp3246_type595(*this)) {
-            data_clkdiv = std::max(data_clkdiv, split_controls ? 2.5f : 2.0f);
-        }
         pio_sm_set_clkdiv(pio, sm_data, data_clkdiv);
         if (split_controls) {
             pio_sm_set_clkdiv(pio, sm_data_b, data_clkdiv);
@@ -756,7 +748,8 @@ Pixel *Hub75::row_buffer_ptr(uint row, uint phase) const {
 uint Hub75::end_of_row_dummy_pixels() const {
     if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
         // DP3246 + TYPE595 needs a longer tail so LAT overlaps the final clocks cleanly.
-        return 6;
+        // Split-head mode is a little less tolerant, especially on the second control triplet.
+        return split_controls ? 8 : 6;
     }
     return 2;
 }
