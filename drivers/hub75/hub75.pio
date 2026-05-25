@@ -167,7 +167,6 @@ static inline void hub75_row_noaddr_program_init(PIO pio, uint sm, uint offset, 
 }
 
 static inline void hub75_row_noaddr_dp3246_program_init(PIO pio, uint sm, uint offset, uint latch_base_pin, uint latch_cycles) {
-    (void)latch_cycles;
     pio_sm_set_consecutive_pindirs(pio, sm, latch_base_pin, 2, true);
     pio_gpio_init(pio, latch_base_pin);
     pio_gpio_init(pio, latch_base_pin + 1);
@@ -176,6 +175,8 @@ static inline void hub75_row_noaddr_dp3246_program_init(PIO pio, uint sm, uint o
     sm_config_set_sideset_pins(&c, latch_base_pin);
     sm_config_set_out_shift(&c, true, true, 32);
     pio_sm_init(pio, sm, offset, &c);
+    pio_sm_exec(pio, sm, pio_encode_out(pio_y, 32));
+    pio_sm_put(pio, sm, latch_cycles);
     pio_sm_set_enabled(pio, sm, true);
 }
 
