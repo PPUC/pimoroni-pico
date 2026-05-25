@@ -635,8 +635,9 @@ void Hub75::dma_complete() {
     if (split_controls && dma_channel_get_irq0_status(dma_channel)) {
         dma_channel_acknowledge_irq0(dma_channel);
 
-        // Phase A clocks the shared row data into the left panel, then arms the right panel.
+        // Phase A advances the shared row state, so both heads must be fully blank first.
         hub75_wait_tx_stall(pio, sm_row);
+        hub75_wait_tx_stall(pio, sm_row_b);
 
         if (line_decoder == LINE_DECODER_TYPE595) {
             if (shiftreg_row_preloaded) {
@@ -659,9 +660,6 @@ void Hub75::dma_complete() {
         if (!uses_dp3246_type595(*this)) {
             pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
         }
-
-        // Do not start clocking the right panel until its previous OEn pulse has finished.
-        hub75_wait_tx_stall(pio, sm_row_b);
 
         dma_channel_set_trans_count(dma_channel_b, panel_width() * 2, false);
         dma_channel_set_read_addr(dma_channel_b, row_buffer_ptr(row, 1), true);
