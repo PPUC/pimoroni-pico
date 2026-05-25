@@ -660,6 +660,9 @@ void Hub75::dma_complete() {
             pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
         }
 
+        // Do not start clocking the right panel until its previous OEn pulse has finished.
+        hub75_wait_tx_stall(pio, sm_row_b);
+
         dma_channel_set_trans_count(dma_channel_b, panel_width() * 2, false);
         dma_channel_set_read_addr(dma_channel_b, row_buffer_ptr(row, 1), true);
     }
