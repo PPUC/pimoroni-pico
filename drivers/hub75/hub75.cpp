@@ -451,6 +451,7 @@ void Hub75::start(irq_handler_t handler) {
 
         row = 0;
         bit = 0;
+        split_phase_b_active = false;
         if (shift_driver == SHIFT_DRIVER_DP3246) {
             hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
             if (split_controls) {
@@ -470,6 +471,7 @@ void Hub75::start(irq_handler_t handler) {
 
 void Hub75::stop(irq_handler_t handler) {
     shiftreg_row_preloaded = false;
+    split_phase_b_active = false;
 
     irq_set_enabled(DMA_IRQ_0, false);
 
@@ -632,7 +634,7 @@ void Hub75::dma_complete() {
         dma_channel_set_read_addr(dma_channel, row_buffer_ptr(row, 0), true);
     }
 
-    if (split_controls && dma_channel_get_irq0_status(dma_channel)) {
+    if (split_controls && !split_phase_b_active && dma_channel_get_irq0_status(dma_channel)) {
         dma_channel_acknowledge_irq0(dma_channel);
 
         // Phase A advances the shared row state, so both heads must be fully blank first.
@@ -663,9 +665,10 @@ void Hub75::dma_complete() {
 
         dma_channel_set_trans_count(dma_channel_b, panel_width() * 2, false);
         dma_channel_set_read_addr(dma_channel_b, row_buffer_ptr(row, 1), true);
+        split_phase_b_active = true;
     }
 
-    if (split_controls && dma_channel_get_irq0_status(dma_channel_b)) {
+    if (split_controls && split_phase_b_active && dma_channel_get_irq0_status(dma_channel_b)) {
         dma_channel_acknowledge_irq0(dma_channel_b);
 
         // Phase B replays the same logical row on the right panel before advancing the scan.
@@ -704,6 +707,7 @@ void Hub75::dma_complete() {
 
         dma_channel_set_trans_count(dma_channel, panel_width() * 2, false);
         dma_channel_set_read_addr(dma_channel, row_buffer_ptr(row, 0), true);
+        split_phase_b_active = false;
     }
 }
 
