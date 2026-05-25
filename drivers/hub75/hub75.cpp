@@ -592,12 +592,6 @@ void Hub75::dma_complete() {
                 // Row 0 was already seeded during startup.
                 shiftreg_row_preloaded = false;
             } else {
-                if (split_controls) {
-                    // With two independently latched heads sharing the row decoder, give the
-                    // previous OEn pulse a little extra time to clear before touching A/B/C.
-                    shiftreg_timing_delay();
-                    shiftreg_timing_delay();
-                }
                 step_shiftreg_row(row);
             }
         }
@@ -652,10 +646,6 @@ void Hub75::dma_complete() {
                     if (shiftreg_row_preloaded) {
                         shiftreg_row_preloaded = false;
                     } else {
-                        // Split-head mode shares the TYPE595 row decoder across both panels, so hold off
-                        // briefly after both OEn pulses have finished before advancing the row register.
-                        shiftreg_timing_delay();
-                        shiftreg_timing_delay();
                         step_shiftreg_row(row);
                     }
                 }
