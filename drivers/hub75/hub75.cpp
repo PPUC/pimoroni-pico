@@ -419,8 +419,15 @@ void Hub75::start(irq_handler_t handler) {
             }
         }
 
-        // Prevent flicker in Python caused by the smaller dataset just blasting through the PIO too quickly.
+        // Split-head routing is less forgiving than a single control triplet, especially with
+        // DP3246/TYPE595 panels, so give the data shifter a bit more setup/hold margin.
         float data_clkdiv = panel_data_clkdiv(panel_width());
+        if (split_controls) {
+            data_clkdiv = std::max(data_clkdiv, 2.0f);
+        }
+        if (uses_dp3246_type595(*this)) {
+            data_clkdiv = std::max(data_clkdiv, split_controls ? 2.5f : 2.0f);
+        }
         pio_sm_set_clkdiv(pio, sm_data, data_clkdiv);
         if (split_controls) {
             pio_sm_set_clkdiv(pio, sm_data_b, data_clkdiv);
