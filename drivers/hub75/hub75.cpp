@@ -47,10 +47,21 @@ uint32_t shiftreg_delay_cycles() {
     return std::max<uint32_t>(8u, (uint32_t)(((uint64_t)system_clock_hz() * 8u + 124999999u) / 125000000u));
 }
 
-float panel_data_clkdiv(uint panel_width) {
-    float base_div = panel_width <= 32 ? 2.0f : 1.0f;
-    float clock_scale = (float)system_clock_hz() / 125000000.0f;
-    return std::max(base_div, base_div * clock_scale);
+float panel_data_clkdiv(uint width) {
+    float target_hz = 125000000.0f;
+
+    if (width <= 128) {
+        target_hz *= 1.0f;
+    } 
+    else if (width <= 192) {
+        target_hz *= 1.5f;
+    } 
+    else if (width <= 256) {
+        target_hz *= 2.0f;
+    }
+
+    float clock_scale = (float)system_clock_hz() / target_hz;
+    return std::max(1.0f, clock_scale);
 }
 
 uint range_min(std::initializer_list<uint> pins) {
@@ -419,10 +430,12 @@ void Hub75::start(irq_handler_t handler) {
             }
         }
 
-        float data_clkdiv = panel_data_clkdiv(panel_width());
+        float data_clkdiv = panel_data_clkdiv(width);
         pio_sm_set_clkdiv(pio, sm_data, data_clkdiv);
+        pio_sm_set_clkdiv(pio, sm_row, data_clkdiv);
         if (split_controls) {
             pio_sm_set_clkdiv(pio, sm_data_b, data_clkdiv);
+            pio_sm_set_clkdiv(pio, sm_row_b, data_clkdiv);
         }
 
         dma_channel = dma_claim_unused_channel(true);
