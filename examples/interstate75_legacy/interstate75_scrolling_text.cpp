@@ -20,7 +20,7 @@ using namespace pimoroni;
 const uint8_t WIDTH = 64;
 const uint8_t HEIGHT = 64;
 
-Hub75 hub75(WIDTH, HEIGHT, nullptr, PANEL_GENERIC, true);
+Hub75 hub75(WIDTH, HEIGHT, nullptr, true);
 
 void __isr dma_complete() {
     hub75.dma_complete();

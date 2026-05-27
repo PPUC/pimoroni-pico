@@ -112,12 +112,6 @@ struct Pixel {
     constexpr Pixel(uint32_t color) : color(color) {};
 };
 
-// Legacy compatibility selector. New hardware-specific behavior should use ShiftDriver.
-enum PanelType {
-    PANEL_GENERIC = 0,
-    PANEL_FM6126A,
-};
-
 enum ShiftDriver {
     SHIFT_DRIVER_SHIFTREG = 0,
     SHIFT_DRIVER_FM6124,
@@ -222,14 +216,14 @@ class Hub75 {
     //unsigned int pin_led_b = 18;
 
     Hub75(uint width, uint height) : Hub75(width, height, nullptr) {};
-    Hub75(uint width, uint height, Pixel *buffer) : Hub75(width, height, buffer, PANEL_GENERIC) {};
-    Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type) : Hub75(width, height, buffer, panel_type, false) {};
-    Hub75(uint width, uint height, Pixel *buffer, PanelType panel_type, bool inverted_stb,
-      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT,
-      ShiftDriver shift_driver = SHIFT_DRIVER_SHIFTREG, LineDecoder line_decoder = LINE_DECODER_TYPE138);
+    Hub75(uint width, uint height, Pixel *buffer)
+      : Hub75(width, height, buffer, SHIFT_DRIVER_SHIFTREG, LINE_DECODER_TYPE138, false) {};
     Hub75(uint width, uint height, Pixel *buffer, ShiftDriver shift_driver, LineDecoder line_decoder, bool inverted_stb,
       COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT)
-      : Hub75(width, height, buffer, PANEL_GENERIC, inverted_stb, color_order, lut_table, shift_driver, line_decoder) {};
+      : Hub75(width, height, buffer, inverted_stb, color_order, lut_table, shift_driver, line_decoder) {};
+    Hub75(uint width, uint height, Pixel *buffer, bool inverted_stb,
+      COLOR_ORDER color_order=COLOR_ORDER::RGB, uint16_t *lut_table = GAMMA_10BIT,
+      ShiftDriver shift_driver = SHIFT_DRIVER_SHIFTREG, LineDecoder line_decoder = LINE_DECODER_TYPE138);
     ~Hub75();
 
     void FM6126A_write_register(uint16_t value, uint8_t position);
@@ -244,7 +238,6 @@ class Hub75 {
     void stop(irq_handler_t handler);
     void dma_complete();
     uint32_t encode_row_payload(uint row, uint bit) const;
-    PanelType legacy_panel_type() const;
     int buffer_offset(uint x, uint y) const;
     uint panel_width() const;
     Pixel *row_buffer_ptr(uint row, uint phase) const;

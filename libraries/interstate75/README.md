@@ -20,7 +20,7 @@ The following example sets up Pico Display, displays some basic demo text and gr
 using namespace pimoroni;
 
 // Display driver for a single 32x32 hub75 matrix
-Hub75 hub75(32, 32, nullptr, PANEL_GENERIC, false);
+Hub75 hub75(32, 32, nullptr, false);
 
 // Graphics library - in 24Bit mode with 16M colours
 PicoGraphics_PenRGB888 graphics(hub75.width, hub75.height, nullptr);

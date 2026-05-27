@@ -47,8 +47,6 @@ const mp_obj_type_t Hub75_type = {
 static const mp_map_elem_t hub75_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_hub75) },
     { MP_OBJ_NEW_QSTR(MP_QSTR_Hub75), (mp_obj_t)&Hub75_type },
-    { MP_ROM_QSTR(MP_QSTR_PANEL_GENERIC), MP_ROM_INT(0) },
-    { MP_ROM_QSTR(MP_QSTR_PANEL_FM6126A), MP_ROM_INT(1) },
     { MP_ROM_QSTR(MP_QSTR_SHIFT_DRIVER_SHIFTREG), MP_ROM_INT(0) },
     { MP_ROM_QSTR(MP_QSTR_SHIFT_DRIVER_FM6124), MP_ROM_INT(1) },
     { MP_ROM_QSTR(MP_QSTR_SHIFT_DRIVER_FM6126A), MP_ROM_INT(2) },

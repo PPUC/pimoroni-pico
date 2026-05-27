@@ -31,8 +31,6 @@ class Interstate75:
     DISPLAY_INTERSTATE75_256X64 = DISPLAY_INTERSTATE75_256X64
     DISPLAY_INTERSTATE75_128X128 = DISPLAY_INTERSTATE75_128X128
 
-    PANEL_GENERIC = hub75.PANEL_GENERIC
-    PANEL_FM6126A = hub75.PANEL_FM6126A
     SHIFT_DRIVER_SHIFTREG = hub75.SHIFT_DRIVER_SHIFTREG
     SHIFT_DRIVER_FM6124 = hub75.SHIFT_DRIVER_FM6124
     SHIFT_DRIVER_FM6126A = hub75.SHIFT_DRIVER_FM6126A
@@ -53,7 +51,7 @@ class Interstate75:
     # Count Constants
     NUM_SWITCHES = 2
 
-    def __init__(self, display, panel_type=hub75.PANEL_GENERIC, stb_invert=False, color_order=hub75.COLOR_ORDER_RGB,
+    def __init__(self, display, stb_invert=False, color_order=hub75.COLOR_ORDER_RGB,
                  shift_driver=hub75.SHIFT_DRIVER_SHIFTREG, line_decoder=hub75.LINE_DECODER_TYPE138):
         self.interstate75w = "Pico W" in sys.implementation._machine  # noqa: SLF001
         self.display = PicoGraphics(display=display)
@@ -69,7 +67,6 @@ class Interstate75:
         self.hub75 = hub75.Hub75(
             out_width,
             out_height,
-            panel_type=panel_type,
             stb_invert=stb_invert,
             color_order=color_order,
             shift_driver=shift_driver,

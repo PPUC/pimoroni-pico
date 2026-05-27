@@ -15,19 +15,19 @@ Button button_b(Interstate75::B);
 //If the display looks streaky or corrupted then uncomment one of the other initalisers
 
 //Works with our 32x32 panels https://shop.pimoroni.com/products/rgb-led-matrix-panel?variant=35962488650 https://shop.pimoroni.com/products/rgb-led-matrix-panel?variant=19321740999
-Hub75 hub75(32, 32, nullptr, PANEL_GENERIC, false);
+Hub75 hub75(32, 32, nullptr, false);
 //or using 2 of these panels
-//Hub75 hub75(64, 32, nullptr, PANEL_GENERIC, false);
+//Hub75 hub75(64, 32, nullptr, false);
 
 //and 64x32 panel https://shop.pimoroni.com/products/rgb-led-matrix-panel?variant=42312764298
-//Hub75 hub75(64, 32, nullptr, PANEL_GENERIC, false);
+//Hub75 hub75(64, 32, nullptr, false);
 //or using 2 of these panels
-//Hub75 hub75(128, 32, nullptr, PANEL_GENERIC, false);
+//Hub75 hub75(128, 32, nullptr, false);
 
 //Works with our 64x64 panel https://shop.pimoroni.com/products/rgb-led-matrix-panel?variant=3029531983882
-//Hub75 hub75(64, 64, nullptr, PANEL_GENERIC, true);
+//Hub75 hub75(64, 64, nullptr, true);
 //or using 2 of these panels
-//Hub75 hub75(128, 64, nullptr, PANEL_GENERIC, false);
+//Hub75 hub75(128, 64, nullptr, false);
 
 PicoGraphics_PenRGB888 graphics(hub75.width, hub75.height, nullptr);
 
@@ -98,4 +98,3 @@ int main() {
 
 
 }
-

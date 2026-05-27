@@ -45,7 +45,7 @@ matrix.start()
 
 ### FM6216A Panels
 
-Some panels - based on the FM6126A chips - require a couple of register settings for them to display anything at all. Interstate 75 will set these for you if you specify `panel_type=hub75.PANEL_FM6126A`. Eg:
+Some panels - based on the FM6126A chips - require a couple of register settings for them to display anything at all. Interstate 75 will set these for you if you specify `shift_driver=hub75.SHIFT_DRIVER_FM6126A`. Eg:
 
 ```python
 import hub75
@@ -53,7 +53,7 @@ import hub75
 WIDTH = 64
 HEIGHT = 64
 
-matrix = hub75.Hub75(WIDTH, HEIGHT, panel_type=hub75.PANEL_FM6126A)
+matrix = hub75.Hub75(WIDTH, HEIGHT, shift_driver=hub75.SHIFT_DRIVER_FM6126A)
 ```
 
 ### Setting Colour Order
