@@ -119,6 +119,7 @@ enum ShiftDriver {
     SHIFT_DRIVER_ICN2038S,
     SHIFT_DRIVER_MBI5124,
     SHIFT_DRIVER_DP3246,
+    SHIFT_DRIVER_RUL6024,
 };
 
 enum LineDecoder {
@@ -230,6 +231,7 @@ class Hub75 {
     void FM6126A_write_register(uint16_t value, uint8_t position);
     void FM6126A_setup();
     void DP3246_setup();
+    void RUL6024_setup();
     void set_color(uint x, uint y, Pixel c);
     void render();
     void set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b);

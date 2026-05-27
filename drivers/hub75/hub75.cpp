@@ -220,7 +220,7 @@ void Hub75::FM6126A_write_register(uint16_t value, uint8_t position) {
 void Hub75::FM6126A_setup() {
     // Ridiculous register write nonsense for the FM6126A-based 64x64 matrix
     FM6126A_write_register(0b1111111111111110, 12);
-    FM6126A_write_register(0b0000001000000000, 13);
+    FM6126A_write_register(0b0000010000000000, 13);
 }
 
 void Hub75::DP3246_setup() {
@@ -283,6 +283,147 @@ void Hub75::DP3246_setup() {
     }
 }
 
+void Hub75::RUL6024_setup() {
+    static constexpr uint16_t WREG1 = (0b00111u << 11) | (0b0011u << 7) | (0b011u << 4) | 0b0100u;
+    static constexpr uint16_t WREG2 = (0b1u << 10) | (0b1u << 9) | (0b1u << 6) | (0b1u << 3) | (0b1u << 2) | 0b01u;
+    static constexpr uint8_t CMD_RESET_OEN = 1;
+    static constexpr uint8_t CMD_DATA_LATCH = 3;
+    static constexpr uint8_t CMD_WREG1 = 11;
+    static constexpr uint8_t CMD_WREG2 = 12;
+    uint setup_width = panel_width();
+
+    auto write_register = [&](uint clock_pin, uint strobe_pin, uint16_t value, uint8_t position) {
+        gpio_put(strobe_pin, !stb_polarity);
+        sleep_us(10);
+
+        uint8_t threshold = setup_width - position;
+        for (uint i = 0; i < setup_width; ++i) {
+            bool b = value & (1u << (i % 16));
+
+            gpio_put(clock_pin, !clk_polarity);
+            sleep_us(10);
+            set_all_data_pins(*this, b);
+
+            gpio_put(strobe_pin, i > threshold);
+            sleep_us(10);
+            gpio_put(clock_pin, clk_polarity);
+            sleep_us(10);
+        }
+    };
+
+    auto write_command = [&](uint clock_pin, uint strobe_pin, uint oe_pin, uint8_t command) {
+        switch (command) {
+            case CMD_RESET_OEN:
+                gpio_put(oe_pin, !oe_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                gpio_put(strobe_pin, !stb_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(strobe_pin, stb_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+
+                gpio_put(strobe_pin, !stb_polarity);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(oe_pin, oe_polarity);
+                sleep_us(10);
+
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+
+                gpio_put(clock_pin, !clk_polarity);
+                gpio_put(strobe_pin, stb_polarity);
+                sleep_us(10);
+                gpio_put(oe_pin, !oe_polarity);
+
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(strobe_pin, !stb_polarity);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                break;
+
+            case CMD_DATA_LATCH:
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(strobe_pin, stb_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, clk_polarity);
+                sleep_us(10);
+                gpio_put(clock_pin, !clk_polarity);
+                sleep_us(10);
+                gpio_put(strobe_pin, !stb_polarity);
+                sleep_us(10);
+                gpio_put(oe_pin, oe_polarity);
+                break;
+
+            case CMD_WREG1:
+            case CMD_WREG2: {
+                gpio_put(oe_pin, !oe_polarity);
+                gpio_put(clock_pin, !clk_polarity);
+                gpio_put(strobe_pin, !stb_polarity);
+                sleep_us(10);
+
+                uint8_t latch_width = command == CMD_WREG1 ? CMD_WREG1 : CMD_WREG2;
+                for (uint i = 0; i <= latch_width; ++i) {
+                    gpio_put(clock_pin, clk_polarity);
+                    sleep_us(10);
+                    if (i == 0) {
+                        gpio_put(strobe_pin, stb_polarity);
+                        sleep_us(10);
+                    }
+                    gpio_put(clock_pin, !clk_polarity);
+                    sleep_us(10);
+                }
+
+                write_register(clock_pin, strobe_pin, command == CMD_WREG1 ? WREG1 : WREG2, 12);
+                gpio_put(oe_pin, oe_polarity);
+                sleep_us(10);
+                break;
+            }
+        }
+    };
+
+    auto setup_panel = [&](uint clock_pin, uint strobe_pin, uint oe_pin) {
+        write_command(clock_pin, strobe_pin, oe_pin, CMD_WREG1);
+        write_command(clock_pin, strobe_pin, oe_pin, CMD_WREG2);
+        write_command(clock_pin, strobe_pin, oe_pin, CMD_DATA_LATCH);
+        write_command(clock_pin, strobe_pin, oe_pin, CMD_RESET_OEN);
+    };
+
+    setup_panel(pin_clk, pin_stb, pin_oe);
+    if (split_controls) {
+        setup_panel(pin_clk2, pin_stb2, pin_oe2);
+    }
+}
+
 void Hub75::init_shiftreg_rows() {
     // SM5266P/SM5368PF-style row decoders use A=row clock, B=BK, C=row data.
     gpio_init(pin_row_a); gpio_set_function(pin_row_a, GPIO_FUNC_SIO); gpio_set_dir(pin_row_a, true);
@@ -314,6 +455,9 @@ void Hub75::start(irq_handler_t handler) {
         switch (shift_driver) {
             case SHIFT_DRIVER_FM6126A:
                 FM6126A_setup();
+                break;
+            case SHIFT_DRIVER_RUL6024:
+                RUL6024_setup();
                 break;
             case SHIFT_DRIVER_DP3246:
                 DP3246_setup();
