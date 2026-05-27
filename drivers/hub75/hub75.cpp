@@ -769,8 +769,7 @@ Pixel *Hub75::row_buffer_ptr(uint row, uint phase) const {
 uint Hub75::end_of_row_dummy_pixels() const {
     if (shift_driver == SHIFT_DRIVER_DP3246 && line_decoder == LINE_DECODER_TYPE595) {
         // DP3246 + TYPE595 needs a longer tail so LAT overlaps the final clocks cleanly.
-        // Split-head mode is a little less tolerant, especially on the second control triplet.
-        return split_controls ? 8 : 6;
+        return 6;
     }
     return 2;
 }
