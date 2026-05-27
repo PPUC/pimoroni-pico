@@ -85,6 +85,26 @@ Example:
 
 This option does not change the latch pulse width itself. It only reduces the visible OE time around latching.
 
+### DP3246 Latch Timing
+
+The `DP3246` runtime path uses a fixed latch-high extension in the row PIO program: one latch instruction plus two `nop [7]` instructions.
+
+That keeps `LAT` high for `24` row-state-machine cycles total.
+
+At a Pico system clock of `266 MHz`, the current width-based clock divider targets these approximate row-SM rates:
+
+- `128x32`: `125 MHz`, so DP3246 latch-high time is about `192 ns`
+- `192x64`: `187.5 MHz`, so DP3246 latch-high time is about `128 ns`
+- `256x64`: `250 MHz`, so DP3246 latch-high time is about `96 ns`
+
+Practical guidance:
+
+- `150 MHz` is acceptable for `128x32`
+- `150 MHz` is acceptable for `192x64`
+- `256x64` should be run at `266 MHz`
+
+Reason: the `256x64` path targets a `250 MHz` row/data state-machine rate. At `150 MHz`, the divider bottoms out at `1.0`, so the state machines can no longer reach that timing.
+
 ## ShiftDriver
 
 `ShiftDriver` selects the behavior of the panel's column driver / PWM driver chips.
@@ -95,7 +115,7 @@ Generic HUB75 scan path. Use this for normal panels with no known special init o
 
 ### `SHIFT_DRIVER_FM6124`
 
-Uses the same runtime scan/latch path as `DP3246`, but skips the `DP3246` magic startup sequence. This is intentional because some FM6124-family panels behave correctly with the DP3246-style timing but must not receive the DP3246 init sequence.
+Currently uses the generic runtime path. There is no chip-specific init or timing path for it yet.
 
 ### `SHIFT_DRIVER_FM6126A`
 
@@ -156,12 +176,9 @@ Distinct shift-driver implementations:
 - `SHIFT_DRIVER_DP3246`
 - `SHIFT_DRIVER_RUL6024`
 
-Shared-but-intentional shift-driver behavior:
-
-- `SHIFT_DRIVER_FM6124` shares the DP3246-style runtime path, but not the DP3246 startup sequence
-
 Generic-only shift-driver labels at the moment:
 
+- `SHIFT_DRIVER_FM6124`
 - `SHIFT_DRIVER_ICN2038S`
 - `SHIFT_DRIVER_MBI5124`
 
