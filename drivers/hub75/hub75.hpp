@@ -126,6 +126,7 @@ enum LineDecoder {
     LINE_DECODER_TYPE595,
     LINE_DECODER_TYPE_DIRECT,
     LINE_DECODER_SM5266P,
+    LINE_DECODER_SM5368P,
 };
 
 Pixel hsv_to_rgb(float h, float s, float v);
@@ -244,7 +245,7 @@ class Hub75 {
     // Number of dummy pixels needed after each row before latching the next row.
     // Some shift-driver / line-decoder combinations need more trailing clocks.
     uint end_of_row_dummy_pixels() const;
-    // TYPE595 panels use a serial row decoder. These helpers seed and advance it.
+    // SM5266P/SM5368PF panels use a GPIO-stepped serial row decoder.
     void init_shiftreg_rows();
     void step_shiftreg_row(uint row) const;
 #ifndef NO_PICO_GRAPHICS
