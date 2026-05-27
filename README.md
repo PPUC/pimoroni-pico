@@ -66,6 +66,25 @@ For dual-head mode, define separate:
 
 If those differ from `HUB75_CLK/HUB75_LAT/HUB75_OE`, the driver enables split-head mode automatically.
 
+## Timing Options
+
+### `HUB75_LATCH_BLANKING`
+
+`HUB75_LATCH_BLANKING` subtracts OE-on time around the latch event to help hide latch transitions on panels that show ghosting.
+
+- default: `0`
+- effect: subtracts `2 * HUB75_LATCH_BLANKING` from each bit-plane OE pulse width
+- use it when: the panel shows faint extra pixels or glow around row/latch changes
+
+Example:
+
+```cpp
+#define HUB75_LATCH_BLANKING 2
+#include "hub75.hpp"
+```
+
+This option does not change the latch pulse width itself. It only reduces the visible OE time around latching.
+
 ## ShiftDriver
 
 `ShiftDriver` selects the behavior of the panel's column driver / PWM driver chips.

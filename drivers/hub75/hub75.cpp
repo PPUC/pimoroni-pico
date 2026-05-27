@@ -29,10 +29,6 @@ uint32_t system_clock_hz() {
     return clock_get_hz(clk_sys);
 }
 
-uint32_t latch_cycles_for_system_clock() {
-    return std::max<uint32_t>(1u, system_clock_hz() / 4000000u);
-}
-
 uint32_t shiftreg_delay_cycles() {
     return std::max<uint32_t>(8u, (uint32_t)(((uint64_t)system_clock_hz() * 8u + 124999999u) / 125000000u));
 }
@@ -73,10 +69,6 @@ bool uses_dp3246_or_fm6124_scan_path(const Hub75 &hub75) {
 
 bool uses_gpio_serial_decoder(const Hub75 &hub75) {
     return hub75.line_decoder == LINE_DECODER_SM5266P || hub75.line_decoder == LINE_DECODER_SM5368P;
-}
-
-bool uses_dp3246_serial_row_decoder(const Hub75 &hub75) {
-    return hub75.shift_driver == SHIFT_DRIVER_DP3246 && uses_gpio_serial_decoder(hub75);
 }
 
 } // namespace
@@ -466,8 +458,6 @@ void Hub75::start(irq_handler_t handler) {
                 break;
         }
 
-        uint latch_cycles = latch_cycles_for_system_clock();
-
         if (uses_gpio_serial_decoder(*this)) {
             // GPIO-stepped serial row decoders keep row selection outside the row PIO program.
             init_shiftreg_rows();
@@ -566,18 +556,18 @@ void Hub75::start(irq_handler_t handler) {
         }
         if (uses_gpio_serial_decoder(*this)) {
             if (uses_dp3246_or_fm6124_scan_path(*this)) {
-                hub75_row_noaddr_dp3246_program_init(pio, sm_row, row_prog_offs, pin_stb, latch_cycles);
+                hub75_row_noaddr_dp3246_program_init(pio, sm_row, row_prog_offs, pin_stb);
             } else {
-                hub75_row_noaddr_program_init(pio, sm_row, row_prog_offs, pin_stb, latch_cycles);
+                hub75_row_noaddr_program_init(pio, sm_row, row_prog_offs, pin_stb);
             }
         } else if (line_decoder == LINE_DECODER_TYPE595) {
             if (uses_dp3246_or_fm6124_scan_path(*this)) {
-                hub75_row_shiftreg_dp3246_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb, latch_cycles);
+                hub75_row_shiftreg_dp3246_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb);
             } else {
-                hub75_row_shiftreg_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb, latch_cycles);
+                hub75_row_shiftreg_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb);
             }
         } else {
-            hub75_row_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb, latch_cycles);
+            hub75_row_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb);
         }
 
         if (split_controls) {
@@ -588,18 +578,18 @@ void Hub75::start(irq_handler_t handler) {
             }
             if (uses_gpio_serial_decoder(*this)) {
                 if (uses_dp3246_or_fm6124_scan_path(*this)) {
-                    hub75_row_noaddr_dp3246_program_init(pio, sm_row_b, row_prog_offs, pin_stb2, latch_cycles);
+                    hub75_row_noaddr_dp3246_program_init(pio, sm_row_b, row_prog_offs, pin_stb2);
                 } else {
-                    hub75_row_noaddr_program_init(pio, sm_row_b, row_prog_offs, pin_stb2, latch_cycles);
+                    hub75_row_noaddr_program_init(pio, sm_row_b, row_prog_offs, pin_stb2);
                 }
             } else if (line_decoder == LINE_DECODER_TYPE595) {
                 if (uses_dp3246_or_fm6124_scan_path(*this)) {
-                    hub75_row_shiftreg_dp3246_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2, latch_cycles);
+                    hub75_row_shiftreg_dp3246_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2);
                 } else {
-                    hub75_row_shiftreg_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2, latch_cycles);
+                    hub75_row_shiftreg_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2);
                 }
             } else {
-                hub75_row_program_init(pio, sm_row_b, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb2, latch_cycles);
+                hub75_row_program_init(pio, sm_row_b, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb2);
             }
         }
 
@@ -794,11 +784,6 @@ void Hub75::dma_complete() {
             }
         }
 
-        if (uses_dp3246_serial_row_decoder(*this)) {
-            // DP3246 scan timing wants LAT held while the final clocks are still being shifted.
-            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-        }
-
         // Fully flush the pixel shifter before latching the next row.
         for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
             pio_sm_put_blocking(pio, sm_data, 0);
@@ -807,10 +792,8 @@ void Hub75::dma_complete() {
         // SM is finished when it stalls on empty TX FIFO
         hub75_wait_tx_stall(pio, sm_data);
 
-        if (!uses_dp3246_serial_row_decoder(*this)) {
-            // Latch row data, pulse output enable for new row.
-            pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-        }
+        // Latch row data, pulse output enable for new row.
+        pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
 
         row++;
 
@@ -848,21 +831,14 @@ void Hub75::dma_complete() {
                     }
                 }
 
-                if (uses_dp3246_serial_row_decoder(*this)) {
-                    // DP3246 scan timing wants LAT held while the final clocks are still being shifted.
-                    pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-                }
-
                 for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
                     pio_sm_put_blocking(pio, sm_data, 0);
                 }
 
                 hub75_wait_tx_stall(pio, sm_data);
 
-                if (!uses_dp3246_serial_row_decoder(*this)) {
-                    // Latch row data, pulse output enable for new row.
-                    pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
-                }
+                // Latch row data, pulse output enable for new row.
+                pio_sm_put_blocking(pio, sm_row, encode_row_payload(row, bit));
 
                 dma_channel_set_trans_count(dma_channel_b, panel_width() * 2, false);
                 dma_channel_set_read_addr(dma_channel_b, row_buffer_ptr(row, 1), true);
@@ -876,21 +852,14 @@ void Hub75::dma_complete() {
                 // Phase B replays the same logical row on the right panel before advancing the scan.
                 hub75_wait_tx_stall(pio, sm_row_b);
 
-                if (uses_dp3246_serial_row_decoder(*this)) {
-                    // DP3246 scan timing wants LAT held while the final clocks are still being shifted.
-                    pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
-                }
-
                 for (uint i = 0; i < end_of_row_dummy_pixels(); ++i) {
                     pio_sm_put_blocking(pio, sm_data_b, 0);
                 }
 
                 hub75_wait_tx_stall(pio, sm_data_b);
 
-                if (!uses_dp3246_serial_row_decoder(*this)) {
-                    // Latch row data, pulse output enable for new row.
-                    pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
-                }
+                // Latch row data, pulse output enable for new row.
+                pio_sm_put_blocking(pio, sm_row_b, encode_row_payload(row, bit));
 
                 row++;
 
@@ -922,6 +891,10 @@ void Hub75::dma_complete() {
 
 uint32_t Hub75::encode_row_payload(uint row, uint bit) const {
     uint32_t oe_width = brightness << bit;
+#if HUB75_LATCH_BLANKING > 0
+    const uint32_t blank = (uint32_t)HUB75_LATCH_BLANKING * 2u;
+    oe_width = oe_width > blank ? oe_width - blank : 1u;
+#endif
 
     if (line_decoder == LINE_DECODER_TYPE595) {
         uint32_t row_data = row == 0 ? 1u : 0u;
@@ -954,10 +927,7 @@ Pixel *Hub75::row_buffer_ptr(uint row, uint phase) const {
 }
 
 uint Hub75::end_of_row_dummy_pixels() const {
-    if (uses_dp3246_serial_row_decoder(*this)) {
-        // DP3246 scan timing driving SM5266P/SM5368PF needs a longer tail so LAT overlaps the final clocks cleanly.
-        return 6;
-    }
+    // @todo: Is this the correct value for all chips?
     return 2;
 }
 

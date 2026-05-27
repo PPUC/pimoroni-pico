@@ -64,6 +64,12 @@
 #define HUB75_OE2 HUB75_OE
 #endif
 
+// OE blanking cycles subtracted from each bit-plane pulse.
+// Increase to hide latch transitions on panels that ghost around LAT/OE.
+#ifndef HUB75_LATCH_BLANKING
+#define HUB75_LATCH_BLANKING 0
+#endif
+
 namespace pimoroni {
 const uint DATA_BASE_PIN = HUB75_R0;
 const uint DATA_N_PINS = 6;
