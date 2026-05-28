@@ -1014,6 +1014,15 @@ void Hub75::clear() {
     }
 }
 
+void Hub75::service() {
+    if (!software_icnd2153_active) {
+        return;
+    }
+
+    icnd2153_refresh_row(row);
+    row = (row + 1) % (height / 2);
+}
+
 
 void Hub75::dma_complete() {
     if (software_icnd2153_active) {

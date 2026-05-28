@@ -248,6 +248,7 @@ class Hub75 {
     void clear();
     void start(irq_handler_t handler);
     void stop(irq_handler_t handler);
+    void service();
     void dma_complete();
     uint32_t encode_row_payload(uint row, uint bit) const;
     int buffer_offset(uint x, uint y) const;
