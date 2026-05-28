@@ -50,6 +50,11 @@ float panel_data_clkdiv(uint width) {
     return std::max(1.0f, clock_scale);
 }
 
+uint32_t latch_cycles_for_system_clock(uint width) {
+    float cycles = (system_clock_hz() / 4000000.0f) / panel_data_clkdiv(width);
+    return std::max<uint32_t>(1u, static_cast<uint32_t>(cycles));
+}
+
 uint range_min(std::initializer_list<uint> pins) {
     return *std::min_element(pins.begin(), pins.end());
 }
@@ -458,6 +463,8 @@ void Hub75::start(irq_handler_t handler) {
                 break;
         }
 
+        uint latch_cycles = latch_cycles_for_system_clock(width);
+
         if (uses_gpio_serial_decoder(*this)) {
             // GPIO-stepped serial row decoders keep row selection outside the row PIO program.
             init_shiftreg_rows();
@@ -567,7 +574,7 @@ void Hub75::start(irq_handler_t handler) {
                 hub75_row_shiftreg_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb);
             }
         } else {
-            hub75_row_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb);
+            hub75_row_program_init(pio, sm_row, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb, latch_cycles);
         }
 
         if (split_controls) {
@@ -589,7 +596,7 @@ void Hub75::start(irq_handler_t handler) {
                     hub75_row_shiftreg_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2);
                 }
             } else {
-                hub75_row_program_init(pio, sm_row_b, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb2);
+                hub75_row_program_init(pio, sm_row_b, row_prog_offs, ROWSEL_BASE_PIN, ROWSEL_N_PINS, pin_stb2, latch_cycles);
             }
         }
 
