@@ -70,7 +70,7 @@
 #define HUB75_LATCH_BLANKING 0
 #endif
 
-namespace pimoroni {
+namespace ZeDMD {
 const uint DATA_BASE_PIN = HUB75_R0;
 const uint DATA_N_PINS = 6;
 const uint ROWSEL_BASE_PIN = HUB75_A;
@@ -126,6 +126,7 @@ enum ShiftDriver {
     SHIFT_DRIVER_MBI5124,
     SHIFT_DRIVER_DP3246,
     SHIFT_DRIVER_RUL6024,
+    SHIFT_DRIVER_ICND2153,
 };
 
 enum LineDecoder {
@@ -134,6 +135,7 @@ enum LineDecoder {
     LINE_DECODER_TYPE_DIRECT,
     LINE_DECODER_SM5266P,
     LINE_DECODER_SM5368P,
+    LINE_DECODER_TC7559E,
 };
 
 Pixel hsv_to_rgb(float h, float s, float v);
@@ -238,6 +240,7 @@ class Hub75 {
     void FM6126A_setup();
     void DP3246_setup();
     void RUL6024_setup();
+    void ICND2153_setup();
     void set_color(uint x, uint y, Pixel c);
     void render();
     void set_pixel(uint x, uint y, uint8_t r, uint8_t g, uint8_t b);
@@ -256,6 +259,9 @@ class Hub75 {
     // SM5266P/SM5368PF panels use a GPIO-stepped serial row decoder.
     void init_shiftreg_rows();
     void step_shiftreg_row(uint row) const;
+    // TC7559E-style row selectors use A=row clock and C=row data.
+    void init_tc7559e_rows();
+    void step_tc7559e_row(uint row) const;
 #ifndef NO_PICO_GRAPHICS
     void update(PicoGraphics *graphics);
 #endif

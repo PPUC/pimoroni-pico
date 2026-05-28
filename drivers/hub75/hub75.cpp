@@ -7,7 +7,7 @@
 
 #include "hub75.hpp"
 
-namespace pimoroni {
+namespace ZeDMD {
 
 namespace {
 
@@ -72,8 +72,20 @@ bool uses_dp3246_scan_path(const Hub75 &hub75) {
     return hub75.shift_driver == SHIFT_DRIVER_DP3246;
 }
 
+bool uses_icnd2153_scan_path(const Hub75 &hub75) {
+    return hub75.shift_driver == SHIFT_DRIVER_ICND2153;
+}
+
 bool uses_gpio_serial_decoder(const Hub75 &hub75) {
     return hub75.line_decoder == LINE_DECODER_SM5266P || hub75.line_decoder == LINE_DECODER_SM5368P;
+}
+
+bool uses_tc7559e_decoder(const Hub75 &hub75) {
+    return hub75.line_decoder == LINE_DECODER_TC7559E;
+}
+
+bool uses_extended_latch_scan_path(const Hub75 &hub75) {
+    return uses_dp3246_scan_path(hub75) || uses_icnd2153_scan_path(hub75);
 }
 
 } // namespace
@@ -421,6 +433,84 @@ void Hub75::RUL6024_setup() {
     }
 }
 
+void Hub75::ICND2153_setup() {
+    static constexpr uint8_t REG_COUNT = 5;
+    static constexpr uint8_t CMD_LATCHES[REG_COUNT] = {4, 6, 8, 10, 2};
+    uint16_t reg_val[REG_COUNT][3] = {};
+    const uint8_t chip_count = static_cast<uint8_t>(panel_width() / 16);
+
+    reg_val[0][0] = (0x07u << 8) | (1u << 6) | (3u << 4);
+    reg_val[0][1] = reg_val[0][0];
+    reg_val[0][2] = reg_val[0][0];
+
+    reg_val[1][0] = (31u << 10) | (255u << 1);
+    reg_val[1][1] = (reg_val[1][0] & 0x83FFu) | (28u << 10);
+    reg_val[1][2] = (reg_val[1][0] & 0x83FFu) | (23u << 10);
+
+    reg_val[2][0] = (4u << 12) | (1u << 9) | (1u << 2) | 3u;
+    reg_val[2][1] = reg_val[2][0];
+    reg_val[2][2] = reg_val[2][0];
+
+    reg_val[3][0] = 0x0040u;
+    reg_val[3][1] = reg_val[3][0];
+    reg_val[3][2] = reg_val[3][0];
+
+    reg_val[4][0] = 0x0008u;
+    reg_val[4][1] = reg_val[4][0];
+    reg_val[4][2] = reg_val[4][0];
+
+    auto send_clock = [&](uint clock_pin) {
+        gpio_put(clock_pin, clk_polarity);
+        gpio_put(clock_pin, !clk_polarity);
+    };
+
+    auto send_latch = [&](uint clock_pin, uint strobe_pin, uint8_t clocks) {
+        gpio_put(strobe_pin, stb_polarity);
+        while (clocks--) {
+            send_clock(clock_pin);
+        }
+        gpio_put(strobe_pin, !stb_polarity);
+    };
+
+    auto setup_panel = [&](uint clock_pin, uint strobe_pin) {
+        send_latch(clock_pin, strobe_pin, 14);
+        send_latch(clock_pin, strobe_pin, 12);
+
+        for (uint8_t reg_id = 0; reg_id < REG_COUNT; ++reg_id) {
+            send_latch(clock_pin, strobe_pin, 14);
+
+            for (uint8_t chip = 0; chip < chip_count; ++chip) {
+                for (uint8_t bit_idx = 0; bit_idx < 16; ++bit_idx) {
+                    if (chip == chip_count - 1 && bit_idx == 16 - CMD_LATCHES[reg_id]) {
+                        gpio_put(strobe_pin, stb_polarity);
+                    }
+
+                    uint16_t mask = static_cast<uint16_t>(0x8000u >> bit_idx);
+                    bool r = (reg_val[reg_id][0] & mask) != 0;
+                    bool g = (reg_val[reg_id][1] & mask) != 0;
+                    bool b = (reg_val[reg_id][2] & mask) != 0;
+
+                    gpio_put(pin_r0, r);
+                    gpio_put(pin_g0, g);
+                    gpio_put(pin_b0, b);
+                    gpio_put(pin_r1, r);
+                    gpio_put(pin_g1, g);
+                    gpio_put(pin_b1, b);
+                    send_clock(clock_pin);
+                }
+
+                set_all_data_pins(*this, false);
+                gpio_put(strobe_pin, !stb_polarity);
+            }
+        }
+    };
+
+    setup_panel(pin_clk, pin_stb);
+    if (split_controls) {
+        setup_panel(pin_clk2, pin_stb2);
+    }
+}
+
 void Hub75::init_shiftreg_rows() {
     // SM5266P/SM5368PF-style row decoders use A=row clock, B=BK, C=row data.
     gpio_init(pin_row_a); gpio_set_function(pin_row_a, GPIO_FUNC_SIO); gpio_set_dir(pin_row_a, true);
@@ -447,6 +537,27 @@ void Hub75::step_shiftreg_row(uint row) const {
     }
 }
 
+void Hub75::init_tc7559e_rows() {
+    gpio_init(pin_row_a); gpio_set_function(pin_row_a, GPIO_FUNC_SIO); gpio_set_dir(pin_row_a, true);
+    gpio_init(pin_row_c); gpio_set_function(pin_row_c, GPIO_FUNC_SIO); gpio_set_dir(pin_row_c, true);
+
+    gpio_put(pin_row_a, 0);
+    gpio_put(pin_row_c, 0);
+}
+
+void Hub75::step_tc7559e_row(uint row) const {
+    // TC7559E clears and seeds the selector by clocking a single '1' on wrap to row 0.
+    gpio_put(pin_row_c, row == 0);
+    shiftreg_timing_delay();
+    gpio_put(pin_row_a, 1);
+    shiftreg_timing_delay();
+    gpio_put(pin_row_a, 0);
+    if (row == 0) {
+        shiftreg_timing_delay();
+        gpio_put(pin_row_c, 0);
+    }
+}
+
 void Hub75::start(irq_handler_t handler) {
     if(handler) {
         switch (shift_driver) {
@@ -459,6 +570,9 @@ void Hub75::start(irq_handler_t handler) {
             case SHIFT_DRIVER_DP3246:
                 DP3246_setup();
                 break;
+            case SHIFT_DRIVER_ICND2153:
+                ICND2153_setup();
+                break;
             default:
                 break;
         }
@@ -469,6 +583,10 @@ void Hub75::start(irq_handler_t handler) {
             // GPIO-stepped serial row decoders keep row selection outside the row PIO program.
             init_shiftreg_rows();
             step_shiftreg_row(0);
+            shiftreg_row_preloaded = true;
+        } else if (uses_tc7559e_decoder(*this)) {
+            init_tc7559e_rows();
+            step_tc7559e_row(0);
             shiftreg_row_preloaded = true;
         }
 
@@ -481,7 +599,7 @@ void Hub75::start(irq_handler_t handler) {
             data_range_base = range_min({DATA_BASE_PIN, pin_clk, pin_clk2});
             data_range_count = range_max({DATA_BASE_PIN + DATA_N_PINS - 1, pin_clk, pin_clk2}) - data_range_base + 1;
 
-            if (uses_gpio_serial_decoder(*this)) {
+            if (uses_gpio_serial_decoder(*this) || uses_tc7559e_decoder(*this)) {
                 row_range_base = range_min({pin_stb, pin_stb + 1, pin_stb2, pin_stb2 + 1});
                 row_range_count = range_max({pin_stb, pin_stb + 1, pin_stb2, pin_stb2 + 1}) - row_range_base + 1;
             } else if (line_decoder == LINE_DECODER_TYPE595) {
@@ -493,7 +611,7 @@ void Hub75::start(irq_handler_t handler) {
             }
         }
 
-        if (uses_dp3246_scan_path(*this)) {
+        if (uses_extended_latch_scan_path(*this)) {
             pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_data_rgb888_invclk_program, &pio, &sm_data,
               &data_prog_offs, data_range_base, data_range_count, true);
         } else {
@@ -501,8 +619,8 @@ void Hub75::start(irq_handler_t handler) {
               &data_prog_offs, data_range_base, data_range_count, true);
         }
 
-        if (uses_gpio_serial_decoder(*this)) {
-            if (uses_dp3246_scan_path(*this)) {
+        if (uses_gpio_serial_decoder(*this) || uses_tc7559e_decoder(*this)) {
+            if (uses_extended_latch_scan_path(*this)) {
                 if (inverted_stb) {
                     pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_noaddr_dp3246_inverted_program, &pio, &sm_row,
                       &row_prog_offs, row_range_base, row_range_count, true);
@@ -533,7 +651,7 @@ void Hub75::start(irq_handler_t handler) {
                 pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_shiftreg_program, &pio, &sm_row,
                   &row_prog_offs, row_range_base, row_range_count, true);
             }
-        } else if (uses_dp3246_scan_path(*this)) {
+        } else if (uses_extended_latch_scan_path(*this)) {
             if (inverted_stb) {
                 pio_claim_free_sm_and_add_program_for_gpio_range(&hub75_row_dp3246_inverted_program, &pio, &sm_row,
                   &row_prog_offs, row_range_base, row_range_count, true);
@@ -556,19 +674,19 @@ void Hub75::start(irq_handler_t handler) {
             sm_row_b = pio_claim_unused_sm(pio, true);
         }
 
-        if (uses_dp3246_scan_path(*this)) {
+        if (uses_extended_latch_scan_path(*this)) {
             hub75_data_rgb888_invclk_program_init(pio, sm_data, data_prog_offs, DATA_BASE_PIN, pin_clk);
         } else {
             hub75_data_rgb888_program_init(pio, sm_data, data_prog_offs, DATA_BASE_PIN, pin_clk);
         }
-        if (uses_gpio_serial_decoder(*this)) {
-            if (uses_dp3246_scan_path(*this)) {
+        if (uses_gpio_serial_decoder(*this) || uses_tc7559e_decoder(*this)) {
+            if (uses_extended_latch_scan_path(*this)) {
                 hub75_row_noaddr_dp3246_program_init(pio, sm_row, row_prog_offs, pin_stb);
             } else {
                 hub75_row_noaddr_program_init(pio, sm_row, row_prog_offs, pin_stb);
             }
         } else if (line_decoder == LINE_DECODER_TYPE595) {
-            if (uses_dp3246_scan_path(*this)) {
+            if (uses_extended_latch_scan_path(*this)) {
                 hub75_row_shiftreg_dp3246_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb);
             } else {
                 hub75_row_shiftreg_program_init(pio, sm_row, row_prog_offs, pin_row_a, pin_stb);
@@ -578,19 +696,19 @@ void Hub75::start(irq_handler_t handler) {
         }
 
         if (split_controls) {
-            if (uses_dp3246_scan_path(*this)) {
+            if (uses_extended_latch_scan_path(*this)) {
                 hub75_data_rgb888_invclk_program_init(pio, sm_data_b, data_prog_offs, DATA_BASE_PIN, pin_clk2);
             } else {
                 hub75_data_rgb888_program_init(pio, sm_data_b, data_prog_offs, DATA_BASE_PIN, pin_clk2);
             }
-            if (uses_gpio_serial_decoder(*this)) {
-                if (uses_dp3246_scan_path(*this)) {
+            if (uses_gpio_serial_decoder(*this) || uses_tc7559e_decoder(*this)) {
+                if (uses_extended_latch_scan_path(*this)) {
                     hub75_row_noaddr_dp3246_program_init(pio, sm_row_b, row_prog_offs, pin_stb2);
                 } else {
                     hub75_row_noaddr_program_init(pio, sm_row_b, row_prog_offs, pin_stb2);
                 }
             } else if (line_decoder == LINE_DECODER_TYPE595) {
-                if (uses_dp3246_scan_path(*this)) {
+                if (uses_extended_latch_scan_path(*this)) {
                     hub75_row_shiftreg_dp3246_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2);
                 } else {
                     hub75_row_shiftreg_program_init(pio, sm_row_b, row_prog_offs, pin_row_a, pin_stb2);
@@ -634,7 +752,7 @@ void Hub75::start(irq_handler_t handler) {
         row = 0;
         bit = 0;
         split_phase_b_active = false;
-        if (uses_dp3246_scan_path(*this)) {
+        if (uses_extended_latch_scan_path(*this)) {
             hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
             if (split_controls) {
                 hub75_data_rgb888_invclk_set_shift(pio, sm_data_b, data_prog_offs, bit);
@@ -678,7 +796,7 @@ void Hub75::stop(irq_handler_t handler) {
     if(pio_sm_is_claimed(pio, sm_data)) {
         pio_sm_set_enabled(pio, sm_data, false);
         pio_sm_drain_tx_fifo(pio, sm_data);
-        if (uses_dp3246_scan_path(*this)) {
+        if (uses_extended_latch_scan_path(*this)) {
             pio_remove_program_and_unclaim_sm(&hub75_data_rgb888_invclk_program, pio, sm_data, data_prog_offs);
         } else {
             pio_remove_program_and_unclaim_sm(&hub75_data_rgb888_program, pio, sm_data, data_prog_offs);
@@ -693,8 +811,8 @@ void Hub75::stop(irq_handler_t handler) {
     if(pio_sm_is_claimed(pio, sm_row)) {
         pio_sm_set_enabled(pio, sm_row, false);
         pio_sm_drain_tx_fifo(pio, sm_row);
-        if (uses_gpio_serial_decoder(*this)) {
-          if (uses_dp3246_scan_path(*this)) {
+        if (uses_gpio_serial_decoder(*this) || uses_tc7559e_decoder(*this)) {
+          if (uses_extended_latch_scan_path(*this)) {
                 if (inverted_stb) {
                     pio_remove_program_and_unclaim_sm(&hub75_row_noaddr_dp3246_inverted_program, pio, sm_row, row_prog_offs);
                 } else {
@@ -706,7 +824,7 @@ void Hub75::stop(irq_handler_t handler) {
                 pio_remove_program_and_unclaim_sm(&hub75_row_noaddr_program, pio, sm_row, row_prog_offs);
             }
         } else if (line_decoder == LINE_DECODER_TYPE595) {
-          if (uses_dp3246_scan_path(*this)) {
+          if (uses_extended_latch_scan_path(*this)) {
                 if (inverted_stb) {
                     pio_remove_program_and_unclaim_sm(&hub75_row_shiftreg_dp3246_inverted_program, pio, sm_row, row_prog_offs);
                 } else {
@@ -717,7 +835,7 @@ void Hub75::stop(irq_handler_t handler) {
             } else {
                 pio_remove_program_and_unclaim_sm(&hub75_row_shiftreg_program, pio, sm_row, row_prog_offs);
             }
-        } else if (uses_dp3246_scan_path(*this)) {
+        } else if (uses_extended_latch_scan_path(*this)) {
             if (inverted_stb) {
                 pio_remove_program_and_unclaim_sm(&hub75_row_dp3246_inverted_program, pio, sm_row, row_prog_offs);
             } else {
@@ -789,6 +907,12 @@ void Hub75::dma_complete() {
             } else {
                 step_shiftreg_row(row);
             }
+        } else if (uses_tc7559e_decoder(*this)) {
+            if (shiftreg_row_preloaded) {
+                shiftreg_row_preloaded = false;
+            } else {
+                step_tc7559e_row(row);
+            }
         }
 
         // Fully flush the pixel shifter before latching the next row.
@@ -810,7 +934,7 @@ void Hub75::dma_complete() {
             if (bit == BIT_DEPTH) {
                 bit = 0;
             }
-            if (uses_dp3246_scan_path(*this)) {
+            if (uses_extended_latch_scan_path(*this)) {
                 hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
             } else {
                 hub75_data_rgb888_set_shift(pio, sm_data, data_prog_offs, bit);
@@ -835,6 +959,12 @@ void Hub75::dma_complete() {
                         shiftreg_row_preloaded = false;
                     } else {
                         step_shiftreg_row(row);
+                    }
+                } else if (uses_tc7559e_decoder(*this)) {
+                    if (shiftreg_row_preloaded) {
+                        shiftreg_row_preloaded = false;
+                    } else {
+                        step_tc7559e_row(row);
                     }
                 }
 
@@ -876,7 +1006,7 @@ void Hub75::dma_complete() {
                     if (bit == BIT_DEPTH) {
                         bit = 0;
                     }
-                    if (uses_dp3246_scan_path(*this)) {
+                    if (uses_extended_latch_scan_path(*this)) {
                         hub75_data_rgb888_invclk_set_shift(pio, sm_data, data_prog_offs, bit);
                         hub75_data_rgb888_invclk_set_shift(pio, sm_data_b, data_prog_offs, bit);
                     } else {
@@ -910,7 +1040,7 @@ uint32_t Hub75::encode_row_payload(uint row, uint bit) const {
         return shift_low | (shift_high << 3) | (oe_width << 6);
     }
 
-    if (uses_gpio_serial_decoder(*this)) {
+    if (uses_gpio_serial_decoder(*this) || uses_tc7559e_decoder(*this)) {
         return oe_width << 5;
     }
 

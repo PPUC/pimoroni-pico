@@ -42,8 +42,8 @@ Hub75 display(
     128,
     64,
     nullptr,
-    SHIFT_DRIVER_FM6124,
-    LINE_DECODER_TYPE595,
+    SHIFT_DRIVER_ICND2153,
+    LINE_DECODER_TC7559E,
     false
 );
 ```
@@ -117,6 +117,12 @@ Generic HUB75 scan path. Use this for normal panels with no known special init o
 
 Currently uses the generic runtime path. There is no chip-specific init or timing path for it yet.
 
+### `SHIFT_DRIVER_ICND2153`
+
+Adds the ICND2153/STP1612PW05/FM6124C register-init sequence and uses the extended latch-timing runtime path.
+
+This is intended for panels paired with serial row selectors such as `TC7559E`.
+
 ### `SHIFT_DRIVER_FM6126A`
 
 Has a dedicated chip-init sequence implemented in `FM6126A_setup()`.
@@ -167,11 +173,18 @@ Currently uses the same implementation as `LINE_DECODER_SM5266P`.
 
 It is kept as a separate enum because the chip identity matters, even if the current implementation is shared.
 
+### `LINE_DECODER_TC7559E`
+
+Software-stepped serial row selector for `TC7559E`-style panels.
+
+This follows the same wrap-to-row-0 seed behavior used by `HUB75Enano`: clock a single `1` on row 0, then shift zeros for subsequent rows.
+
 ## What Is Fully Implemented
 
 Distinct shift-driver implementations:
 
 - `SHIFT_DRIVER_SHIFTREG`
+- `SHIFT_DRIVER_ICND2153`
 - `SHIFT_DRIVER_FM6126A`
 - `SHIFT_DRIVER_DP3246`
 - `SHIFT_DRIVER_RUL6024`
@@ -188,6 +201,7 @@ Distinct line-decoder implementations:
 - `LINE_DECODER_TYPE595`
 - `LINE_DECODER_TYPE_DIRECT`
 - `LINE_DECODER_SM5266P`
+- `LINE_DECODER_TC7559E`
 
 Shared-but-intentional line-decoder behavior:
 

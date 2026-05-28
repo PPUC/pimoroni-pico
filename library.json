@@ -1,6 +1,6 @@
 {
   "name": "zedmd-pico-drivers",
-  "description": "ZeDMD pico hub75 driver, derived from pimoroni-pico",
+  "description": "ZeDMD pico hub75 driver, derived from pimoroni-pico, but with way more features",
   "version": "0.3.0",
   "downloadUrl": "https://github.com/PPUC/zedmd-pico-drivers/archive/zedmd.zip",
   "frameworks": "arduino",
