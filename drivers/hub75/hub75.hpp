@@ -266,9 +266,11 @@ class Hub75 {
     bool uses_icnd2153_software_scan() const;
     void icnd2153_run_loop();
     void icnd2153_refresh_row(uint row);
-    void icnd2153_set_phase_data(uint row, uint phase, uint x, uint bit_index) const;
-    void icnd2153_shift_row_phase(uint row, uint phase, uint bit_index, bool final_plane);
-    void icnd2153_pulse_data(uint clock_pin, uint oe_pin) const;
+    void icnd2153_set_phase_data(uint row, uint phase, uint x, uint plane_index) const;
+    void icnd2153_shift_row_phase(uint row, uint phase, uint plane_index, bool final_plane);
+    uint64_t icnd2153_control_mask(uint phase) const;
+    void icnd2153_write_control(uint phase, bool clock_high, bool strobe_high, bool oe_high) const;
+    void icnd2153_pulse_data(uint phase) const;
 #ifndef NO_PICO_GRAPHICS
     void update(PicoGraphics *graphics);
 #endif

@@ -570,64 +570,93 @@ void Hub75::icnd2153_run_loop() {
     }
 }
 
-void Hub75::icnd2153_pulse_data(uint clock_pin, uint oe_pin) const {
-    gpio_put(clock_pin, clk_polarity);
-    gpio_put(oe_pin, 1);
-    gpio_put(clock_pin, !clk_polarity);
-    gpio_put(oe_pin, 0);
+uint64_t Hub75::icnd2153_control_mask(uint phase) const {
+    const uint clock_pin = phase == 0 ? pin_clk : pin_clk2;
+    const uint strobe_pin = phase == 0 ? pin_stb : pin_stb2;
+    const uint oe_pin = phase == 0 ? pin_oe : pin_oe2;
+    return (1ull << clock_pin) | (1ull << strobe_pin) | (1ull << oe_pin);
 }
 
-void Hub75::icnd2153_set_phase_data(uint row, uint phase, uint x, uint bit_index) const {
-    const uint phase_width = panel_width();
-    const uint x_base = phase * phase_width;
-    const Pixel top = render_back_buffer[buffer_offset(x_base + x, row)];
-    const Pixel bottom = render_back_buffer[buffer_offset(x_base + x, row + height / 2)];
-
-    gpio_put(pin_r0, ((top.color >> r_shift) & (1u << bit_index)) != 0);
-    gpio_put(pin_g0, ((top.color >> g_shift) & (1u << bit_index)) != 0);
-    gpio_put(pin_b0, ((top.color >> b_shift) & (1u << bit_index)) != 0);
-    gpio_put(pin_r1, ((bottom.color >> r_shift) & (1u << bit_index)) != 0);
-    gpio_put(pin_g1, ((bottom.color >> g_shift) & (1u << bit_index)) != 0);
-    gpio_put(pin_b1, ((bottom.color >> b_shift) & (1u << bit_index)) != 0);
-}
-
-void Hub75::icnd2153_shift_row_phase(uint row, uint phase, uint bit_index, bool final_plane) {
-    const uint phase_width = panel_width();
+void Hub75::icnd2153_write_control(uint phase, bool clock_high, bool strobe_high, bool oe_high) const {
     const uint clock_pin = phase == 0 ? pin_clk : pin_clk2;
     const uint strobe_pin = phase == 0 ? pin_stb : pin_stb2;
     const uint oe_pin = phase == 0 ? pin_oe : pin_oe2;
 
+    uint64_t value = 0;
+    if (clock_high) {
+        value |= 1ull << clock_pin;
+    }
+    if (strobe_high) {
+        value |= 1ull << strobe_pin;
+    }
+    if (oe_high) {
+        value |= 1ull << oe_pin;
+    }
+
+    gpio_put_masked64(icnd2153_control_mask(phase), value);
+}
+
+void Hub75::icnd2153_pulse_data(uint phase) const {
+    icnd2153_write_control(phase, clk_polarity, false, true);
+    icnd2153_write_control(phase, !clk_polarity, false, false);
+}
+
+void Hub75::icnd2153_set_phase_data(uint row, uint phase, uint x, uint plane_index) const {
+    const uint phase_width = panel_width();
+    const uint x_base = phase * phase_width;
+    const Pixel top = render_back_buffer[buffer_offset(x_base + x, row)];
+    const Pixel bottom = render_back_buffer[buffer_offset(x_base + x, row + height / 2)];
+    const uint16_t plane_mask = static_cast<uint16_t>(1u << (3 - plane_index));
+
+    auto plane_on = [&](uint32_t color, uint shift) -> bool {
+        uint16_t value = static_cast<uint16_t>((color >> shift) & 0x3FFu);
+        uint16_t level4 = std::min<uint16_t>(15u, value >> 4);
+        return (level4 & plane_mask) != 0;
+    };
+
+    gpio_put(pin_r0, plane_on(top.color, r_shift));
+    gpio_put(pin_g0, plane_on(top.color, g_shift));
+    gpio_put(pin_b0, plane_on(top.color, b_shift));
+    gpio_put(pin_r1, plane_on(bottom.color, r_shift));
+    gpio_put(pin_g1, plane_on(bottom.color, g_shift));
+    gpio_put(pin_b1, plane_on(bottom.color, b_shift));
+}
+
+void Hub75::icnd2153_shift_row_phase(uint row, uint phase, uint plane_index, bool final_plane) {
+    const uint phase_width = panel_width();
+
     if (!final_plane) {
         for (uint x = 0; x < phase_width; ++x) {
-            icnd2153_set_phase_data(row, phase, x, bit_index);
+            icnd2153_set_phase_data(row, phase, x, plane_index);
             if (x == phase_width - 1) {
-                gpio_put(strobe_pin, stb_polarity);
+                icnd2153_write_control(phase, !clk_polarity, stb_polarity, false);
             }
-            icnd2153_pulse_data(clock_pin, oe_pin);
+            icnd2153_pulse_data(phase);
             if (x == phase_width - 1) {
-                gpio_put(strobe_pin, !stb_polarity);
+                icnd2153_write_control(phase, !clk_polarity, !stb_polarity, false);
             }
         }
         return;
     }
 
     for (uint x = 0; x < phase_width - 3; ++x) {
-        icnd2153_set_phase_data(row, phase, x, bit_index);
-        icnd2153_pulse_data(clock_pin, oe_pin);
+        icnd2153_set_phase_data(row, phase, x, plane_index);
+        icnd2153_pulse_data(phase);
     }
 
-    icnd2153_set_phase_data(row, phase, phase_width - 3, bit_index);
-    gpio_put(strobe_pin, stb_polarity);
-    icnd2153_pulse_data(clock_pin, oe_pin);
-    gpio_put(strobe_pin, !stb_polarity);
+    icnd2153_set_phase_data(row, phase, phase_width - 3, plane_index);
+    icnd2153_write_control(phase, !clk_polarity, stb_polarity, false);
+    icnd2153_write_control(phase, clk_polarity, stb_polarity, true);
+    icnd2153_write_control(phase, !clk_polarity, !stb_polarity, false);
 
-    icnd2153_set_phase_data(row, phase, phase_width - 2, bit_index);
-    gpio_put(strobe_pin, stb_polarity);
-    icnd2153_pulse_data(clock_pin, oe_pin);
+    icnd2153_set_phase_data(row, phase, phase_width - 2, plane_index);
+    icnd2153_write_control(phase, !clk_polarity, stb_polarity, false);
+    icnd2153_write_control(phase, clk_polarity, stb_polarity, true);
+    icnd2153_write_control(phase, !clk_polarity, stb_polarity, false);
 
-    icnd2153_set_phase_data(row, phase, phase_width - 1, bit_index);
-    icnd2153_pulse_data(clock_pin, oe_pin);
-    gpio_put(strobe_pin, !stb_polarity);
+    icnd2153_set_phase_data(row, phase, phase_width - 1, plane_index);
+    icnd2153_write_control(phase, clk_polarity, stb_polarity, true);
+    icnd2153_write_control(phase, !clk_polarity, !stb_polarity, false);
 }
 
 void Hub75::icnd2153_refresh_row(uint row) {
@@ -642,7 +671,7 @@ void Hub75::icnd2153_refresh_row(uint row) {
     const uint phases = split_controls ? 2u : 1u;
     for (uint phase = 0; phase < phases; ++phase) {
         for (uint plane = 0; plane < kSoftwareBitDepth; ++plane) {
-            icnd2153_shift_row_phase(row, phase, BIT_DEPTH - 1 - plane, plane == kSoftwareBitDepth - 1);
+            icnd2153_shift_row_phase(row, phase, plane, plane == kSoftwareBitDepth - 1);
         }
     }
 }
