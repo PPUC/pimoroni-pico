@@ -84,6 +84,11 @@ bool uses_extended_latch_scan_path(const Hub75 &hub75) {
     return uses_dp3246_scan_path(hub75);
 }
 
+bool icnd2153_timer_callback(repeating_timer_t *timer) {
+    auto *hub75 = static_cast<Hub75 *>(timer->user_data);
+    return hub75->icnd2153_refresh_callback();
+}
+
 } // namespace
 
 Hub75::Hub75(uint width, uint height, Pixel *buffer, bool inverted_stb, COLOR_ORDER color_order,
@@ -554,7 +559,106 @@ void Hub75::step_tc7559e_row(uint row) const {
     }
 }
 
+bool Hub75::uses_icnd2153_software_scan() const {
+    return shift_driver == SHIFT_DRIVER_ICND2153 && line_decoder == LINE_DECODER_TC7559E;
+}
+
+void Hub75::icnd2153_pulse_data(uint clock_pin, uint oe_pin) const {
+    gpio_put(clock_pin, clk_polarity);
+    gpio_put(oe_pin, 1);
+    gpio_put(clock_pin, !clk_polarity);
+    gpio_put(oe_pin, 0);
+}
+
+void Hub75::icnd2153_shift_row_phase(uint row, uint phase, uint bit_index) {
+    const uint phase_width = panel_width();
+    const uint x_base = phase * phase_width;
+    const uint clock_pin = phase == 0 ? pin_clk : pin_clk2;
+    const uint strobe_pin = phase == 0 ? pin_stb : pin_stb2;
+    const uint oe_pin = phase == 0 ? pin_oe : pin_oe2;
+
+    for (uint x = 0; x < phase_width; ++x) {
+        const Pixel top = render_back_buffer[buffer_offset(x_base + x, row)];
+        const Pixel bottom = render_back_buffer[buffer_offset(x_base + x, row + height / 2)];
+
+        gpio_put(pin_r0, ((top.color >> r_shift) & (1u << bit_index)) != 0);
+        gpio_put(pin_g0, ((top.color >> g_shift) & (1u << bit_index)) != 0);
+        gpio_put(pin_b0, ((top.color >> b_shift) & (1u << bit_index)) != 0);
+        gpio_put(pin_r1, ((bottom.color >> r_shift) & (1u << bit_index)) != 0);
+        gpio_put(pin_g1, ((bottom.color >> g_shift) & (1u << bit_index)) != 0);
+        gpio_put(pin_b1, ((bottom.color >> b_shift) & (1u << bit_index)) != 0);
+
+        if (x == phase_width - 1) {
+            gpio_put(strobe_pin, stb_polarity);
+        }
+        icnd2153_pulse_data(clock_pin, oe_pin);
+        if (x == phase_width - 1) {
+            gpio_put(strobe_pin, !stb_polarity);
+        }
+    }
+}
+
+void Hub75::icnd2153_enable_output_phase(uint phase) const {
+    const uint clock_pin = phase == 0 ? pin_clk : pin_clk2;
+    const uint strobe_pin = phase == 0 ? pin_stb : pin_stb2;
+    const uint oe_pin = phase == 0 ? pin_oe : pin_oe2;
+
+    set_all_data_pins(*this, false);
+    gpio_put(strobe_pin, stb_polarity);
+    icnd2153_pulse_data(clock_pin, oe_pin);
+    icnd2153_pulse_data(clock_pin, oe_pin);
+    gpio_put(strobe_pin, !stb_polarity);
+}
+
+void Hub75::icnd2153_refresh_row(uint row) {
+    // ICND2153 panels expect the row selector to be stepped in software and the
+    // GCLK pulse on OE to accompany each shifted pixel bit. We output the top
+    // four PWM bits MSB-first, matching the practical limits of the reference
+    // HUB75Enano implementation.
+    static constexpr uint kSoftwareBitDepth = 4;
+
+    step_tc7559e_row(row);
+
+    const uint phases = split_controls ? 2u : 1u;
+    for (uint phase = 0; phase < phases; ++phase) {
+        for (uint plane = 0; plane < kSoftwareBitDepth; ++plane) {
+            icnd2153_shift_row_phase(row, phase, BIT_DEPTH - 1 - plane);
+        }
+        icnd2153_enable_output_phase(phase);
+    }
+}
+
+bool Hub75::icnd2153_refresh_callback() {
+    if (!software_icnd2153_active) {
+        return false;
+    }
+
+    icnd2153_refresh_row(row);
+    row = (row + 1) % (height / 2);
+    return true;
+}
+
 void Hub75::start(irq_handler_t handler) {
+    if (uses_icnd2153_software_scan()) {
+        ICND2153_setup();
+        init_tc7559e_rows();
+        set_all_data_pins(*this, false);
+        gpio_put(pin_stb, !stb_polarity);
+        gpio_put(pin_oe, 0);
+        if (split_controls) {
+            gpio_put(pin_stb2, !stb_polarity);
+            gpio_put(pin_oe2, 0);
+        }
+
+        row = 0;
+        bit = 0;
+        shiftreg_row_preloaded = false;
+        split_phase_b_active = false;
+        software_icnd2153_active = true;
+        add_repeating_timer_us(-500, icnd2153_timer_callback, this, &icnd2153_timer);
+        return;
+    }
+
     if(handler) {
         switch (shift_driver) {
             case SHIFT_DRIVER_FM6126A:
@@ -766,6 +870,21 @@ void Hub75::start(irq_handler_t handler) {
 }
 
 void Hub75::stop(irq_handler_t handler) {
+    if (software_icnd2153_active) {
+        software_icnd2153_active = false;
+        cancel_repeating_timer(&icnd2153_timer);
+        set_all_data_pins(*this, false);
+        gpio_put(pin_clk, !clk_polarity);
+        gpio_put(pin_stb, !stb_polarity);
+        gpio_put(pin_oe, 0);
+        if (split_controls) {
+            gpio_put(pin_clk2, !clk_polarity);
+            gpio_put(pin_stb2, !stb_polarity);
+            gpio_put(pin_oe2, 0);
+        }
+        return;
+    }
+
     shiftreg_row_preloaded = false;
     split_phase_b_active = false;
 
@@ -890,6 +1009,10 @@ void Hub75::clear() {
 
 
 void Hub75::dma_complete() {
+    if (software_icnd2153_active) {
+        return;
+    }
+
     if (!split_controls && dma_channel_get_irq0_status(dma_channel)) {
         dma_channel_acknowledge_irq0(dma_channel);
 
