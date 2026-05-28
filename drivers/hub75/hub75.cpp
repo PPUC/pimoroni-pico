@@ -570,42 +570,55 @@ void Hub75::icnd2153_pulse_data(uint clock_pin, uint oe_pin) const {
     gpio_put(oe_pin, 0);
 }
 
-void Hub75::icnd2153_shift_row_phase(uint row, uint phase, uint bit_index) {
+void Hub75::icnd2153_set_phase_data(uint row, uint phase, uint x, uint bit_index) const {
     const uint phase_width = panel_width();
     const uint x_base = phase * phase_width;
-    const uint clock_pin = phase == 0 ? pin_clk : pin_clk2;
-    const uint strobe_pin = phase == 0 ? pin_stb : pin_stb2;
-    const uint oe_pin = phase == 0 ? pin_oe : pin_oe2;
+    const Pixel top = render_back_buffer[buffer_offset(x_base + x, row)];
+    const Pixel bottom = render_back_buffer[buffer_offset(x_base + x, row + height / 2)];
 
-    for (uint x = 0; x < phase_width; ++x) {
-        const Pixel top = render_back_buffer[buffer_offset(x_base + x, row)];
-        const Pixel bottom = render_back_buffer[buffer_offset(x_base + x, row + height / 2)];
-
-        gpio_put(pin_r0, ((top.color >> r_shift) & (1u << bit_index)) != 0);
-        gpio_put(pin_g0, ((top.color >> g_shift) & (1u << bit_index)) != 0);
-        gpio_put(pin_b0, ((top.color >> b_shift) & (1u << bit_index)) != 0);
-        gpio_put(pin_r1, ((bottom.color >> r_shift) & (1u << bit_index)) != 0);
-        gpio_put(pin_g1, ((bottom.color >> g_shift) & (1u << bit_index)) != 0);
-        gpio_put(pin_b1, ((bottom.color >> b_shift) & (1u << bit_index)) != 0);
-
-        if (x == phase_width - 1) {
-            gpio_put(strobe_pin, stb_polarity);
-        }
-        icnd2153_pulse_data(clock_pin, oe_pin);
-        if (x == phase_width - 1) {
-            gpio_put(strobe_pin, !stb_polarity);
-        }
-    }
+    gpio_put(pin_r0, ((top.color >> r_shift) & (1u << bit_index)) != 0);
+    gpio_put(pin_g0, ((top.color >> g_shift) & (1u << bit_index)) != 0);
+    gpio_put(pin_b0, ((top.color >> b_shift) & (1u << bit_index)) != 0);
+    gpio_put(pin_r1, ((bottom.color >> r_shift) & (1u << bit_index)) != 0);
+    gpio_put(pin_g1, ((bottom.color >> g_shift) & (1u << bit_index)) != 0);
+    gpio_put(pin_b1, ((bottom.color >> b_shift) & (1u << bit_index)) != 0);
 }
 
-void Hub75::icnd2153_enable_output_phase(uint phase) const {
+void Hub75::icnd2153_shift_row_phase(uint row, uint phase, uint bit_index, bool final_plane) {
+    const uint phase_width = panel_width();
     const uint clock_pin = phase == 0 ? pin_clk : pin_clk2;
     const uint strobe_pin = phase == 0 ? pin_stb : pin_stb2;
     const uint oe_pin = phase == 0 ? pin_oe : pin_oe2;
 
-    set_all_data_pins(*this, false);
+    if (!final_plane) {
+        for (uint x = 0; x < phase_width; ++x) {
+            icnd2153_set_phase_data(row, phase, x, bit_index);
+            if (x == phase_width - 1) {
+                gpio_put(strobe_pin, stb_polarity);
+            }
+            icnd2153_pulse_data(clock_pin, oe_pin);
+            if (x == phase_width - 1) {
+                gpio_put(strobe_pin, !stb_polarity);
+            }
+        }
+        return;
+    }
+
+    for (uint x = 0; x < phase_width - 3; ++x) {
+        icnd2153_set_phase_data(row, phase, x, bit_index);
+        icnd2153_pulse_data(clock_pin, oe_pin);
+    }
+
+    icnd2153_set_phase_data(row, phase, phase_width - 3, bit_index);
     gpio_put(strobe_pin, stb_polarity);
     icnd2153_pulse_data(clock_pin, oe_pin);
+    gpio_put(strobe_pin, !stb_polarity);
+
+    icnd2153_set_phase_data(row, phase, phase_width - 2, bit_index);
+    gpio_put(strobe_pin, stb_polarity);
+    icnd2153_pulse_data(clock_pin, oe_pin);
+
+    icnd2153_set_phase_data(row, phase, phase_width - 1, bit_index);
     icnd2153_pulse_data(clock_pin, oe_pin);
     gpio_put(strobe_pin, !stb_polarity);
 }
@@ -622,9 +635,8 @@ void Hub75::icnd2153_refresh_row(uint row) {
     const uint phases = split_controls ? 2u : 1u;
     for (uint phase = 0; phase < phases; ++phase) {
         for (uint plane = 0; plane < kSoftwareBitDepth; ++plane) {
-            icnd2153_shift_row_phase(row, phase, BIT_DEPTH - 1 - plane);
+            icnd2153_shift_row_phase(row, phase, BIT_DEPTH - 1 - plane, plane == kSoftwareBitDepth - 1);
         }
-        icnd2153_enable_output_phase(phase);
     }
 }
 
