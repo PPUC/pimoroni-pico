@@ -84,11 +84,6 @@ bool uses_extended_latch_scan_path(const Hub75 &hub75) {
     return uses_dp3246_scan_path(hub75);
 }
 
-bool icnd2153_timer_callback(repeating_timer_t *timer) {
-    auto *hub75 = static_cast<Hub75 *>(timer->user_data);
-    return hub75->icnd2153_refresh_callback();
-}
-
 } // namespace
 
 Hub75::Hub75(uint width, uint height, Pixel *buffer, bool inverted_stb, COLOR_ORDER color_order,
@@ -563,6 +558,18 @@ bool Hub75::uses_icnd2153_software_scan() const {
     return shift_driver == SHIFT_DRIVER_ICND2153 && line_decoder == LINE_DECODER_TC7559E;
 }
 
+void Hub75::icnd2153_run_loop() {
+    while (software_icnd2153_active) {
+        icnd2153_refresh_row(row);
+        row = (row + 1) % (height / 2);
+        sleep_us(250);
+    }
+
+    while (true) {
+        tight_loop_contents();
+    }
+}
+
 void Hub75::icnd2153_pulse_data(uint clock_pin, uint oe_pin) const {
     gpio_put(clock_pin, clk_polarity);
     gpio_put(oe_pin, 1);
@@ -640,16 +647,6 @@ void Hub75::icnd2153_refresh_row(uint row) {
     }
 }
 
-bool Hub75::icnd2153_refresh_callback() {
-    if (!software_icnd2153_active) {
-        return false;
-    }
-
-    icnd2153_refresh_row(row);
-    row = (row + 1) % (height / 2);
-    return true;
-}
-
 void Hub75::start(irq_handler_t handler) {
     if (uses_icnd2153_software_scan()) {
         ICND2153_setup();
@@ -667,7 +664,6 @@ void Hub75::start(irq_handler_t handler) {
         shiftreg_row_preloaded = false;
         split_phase_b_active = false;
         software_icnd2153_active = true;
-        add_repeating_timer_us(-500, icnd2153_timer_callback, this, &icnd2153_timer);
         return;
     }
 
@@ -884,7 +880,6 @@ void Hub75::start(irq_handler_t handler) {
 void Hub75::stop(irq_handler_t handler) {
     if (software_icnd2153_active) {
         software_icnd2153_active = false;
-        cancel_repeating_timer(&icnd2153_timer);
         set_all_data_pins(*this, false);
         gpio_put(pin_clk, !clk_polarity);
         gpio_put(pin_stb, !stb_polarity);

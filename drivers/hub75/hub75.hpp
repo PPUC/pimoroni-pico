@@ -1,7 +1,5 @@
 #include <stdint.h>
 #include "pico/stdlib.h"
-#include "pico/time.h"
-
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/irq.h"
@@ -184,8 +182,7 @@ class Hub75 {
     uint row_prog_offs = 0;
     bool shiftreg_row_preloaded = false;
     bool split_phase_b_active = false;
-    bool software_icnd2153_active = false;
-    repeating_timer_t icnd2153_timer;
+    volatile bool software_icnd2153_active = false;
 
     uint brightness = 6;
 
@@ -266,7 +263,7 @@ class Hub75 {
     void init_tc7559e_rows();
     void step_tc7559e_row(uint row) const;
     bool uses_icnd2153_software_scan() const;
-    bool icnd2153_refresh_callback();
+    void icnd2153_run_loop();
     void icnd2153_refresh_row(uint row);
     void icnd2153_set_phase_data(uint row, uint phase, uint x, uint bit_index) const;
     void icnd2153_shift_row_phase(uint row, uint phase, uint bit_index, bool final_plane);
