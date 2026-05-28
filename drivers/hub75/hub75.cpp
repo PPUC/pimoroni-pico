@@ -72,10 +72,6 @@ bool uses_dp3246_scan_path(const Hub75 &hub75) {
     return hub75.shift_driver == SHIFT_DRIVER_DP3246;
 }
 
-bool uses_icnd2153_scan_path(const Hub75 &hub75) {
-    return hub75.shift_driver == SHIFT_DRIVER_ICND2153;
-}
-
 bool uses_gpio_serial_decoder(const Hub75 &hub75) {
     return hub75.line_decoder == LINE_DECODER_SM5266P || hub75.line_decoder == LINE_DECODER_SM5368P;
 }
@@ -85,7 +81,7 @@ bool uses_tc7559e_decoder(const Hub75 &hub75) {
 }
 
 bool uses_extended_latch_scan_path(const Hub75 &hub75) {
-    return uses_dp3246_scan_path(hub75) || uses_icnd2153_scan_path(hub75);
+    return uses_dp3246_scan_path(hub75);
 }
 
 } // namespace

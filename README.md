@@ -119,7 +119,7 @@ Currently uses the generic runtime path. There is no chip-specific init or timin
 
 ### `SHIFT_DRIVER_ICND2153`
 
-Adds the ICND2153/STP1612PW05/FM6124C register-init sequence and uses the extended latch-timing runtime path.
+Adds the ICND2153/STP1612PW05/FM6124C register-init sequence.
 
 This is intended for panels paired with serial row selectors such as `TC7559E`.
 
